@@ -5,27 +5,39 @@ import {
   BookOpen,
   Compass,
   GraduationCap,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import {PORTAL_MEDIA} from '../../assets/media';
 import {useAuth} from '../../context/AuthContext';
 
 export function AuthPortal() {
-  const {signInStudentSession} = useAuth();
+  const {signInStudentSession, signInAdminWithGoogle, firestoreError} = useAuth();
 
   const [fullName, setFullName] = useState('');
   const [kelas, setKelas] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const displayedError = errorMsg || firestoreError;
+
+  const isAdminCandidateName =
+    fullName.trim().toUpperCase() === 'MUSLEHA BINTI MOKTER';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!fullName.trim()) {
+    const trimmedName = fullName.trim();
+    const trimmedClass = kelas.trim();
+    const isAdminCandidate =
+      trimmedName.toUpperCase() === 'MUSLEHA BINTI MOKTER' &&
+      (trimmedClass === '' || trimmedClass.toUpperCase() === 'ADMIN');
+
+    if (!trimmedName) {
       setErrorMsg('Sila masukkan nama penuh anda sebelum meneruskan.');
       return;
     }
-    if (!kelas.trim()) {
+    if (!isAdminCandidate && !trimmedClass) {
       setErrorMsg('Sila masukkan kelas anda sebelum meneruskan.');
       return;
     }
@@ -34,7 +46,7 @@ export function AuthPortal() {
     try {
       await signInStudentSession({
         fullName,
-        institution: kelas,
+        studentClass: kelas,
       });
     } catch (err) {
       setErrorMsg(
@@ -42,6 +54,20 @@ export function AuthPortal() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAdminGoogleSignIn = async () => {
+    setErrorMsg(null);
+    setGoogleSubmitting(true);
+    try {
+      await signInAdminWithGoogle();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Gagal log masuk menggunakan akaun Google.'
+      );
+    } finally {
+      setGoogleSubmitting(false);
     }
   };
 
@@ -62,7 +88,7 @@ export function AuthPortal() {
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 gap-10 px-6 py-10 lg:grid-cols-12 items-stretch">
         {/* Panel Pengenalan Kurikulum */}
-        <section className="lg:col-span-7 flex flex-col justify-between rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <section className="order-2 lg:order-1 lg:col-span-7 flex flex-col justify-between rounded-2xl border border-slate-200 bg-white overflow-hidden">
           <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-emerald-950">
             <img
               src={PORTAL_MEDIA.heroPortal}
@@ -123,7 +149,7 @@ export function AuthPortal() {
         </section>
 
         {/* Borang Log Masuk Pelajar */}
-        <section className="lg:col-span-5 flex flex-col justify-center rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+        <section className="order-1 lg:order-2 lg:col-span-5 flex flex-col justify-center rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
               Portal Pembelajaran I-KNOW
@@ -138,10 +164,10 @@ export function AuthPortal() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {errorMsg && (
+            {displayedError && (
               <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{errorMsg}</span>
+                <span>{displayedError}</span>
               </div>
             )}
 
@@ -165,13 +191,14 @@ export function AuthPortal() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Kelas <span className="text-red-600">*</span>
+                Kelas{' '}
+                {!isAdminCandidateName && <span className="text-red-600">*</span>}
               </label>
               <div className="relative mt-1.5">
                 <GraduationCap className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
-                  required
+                  required={!isAdminCandidateName}
                   maxLength={160}
                   value={kelas}
                   onChange={(e) => setKelas(e.target.value)}
@@ -183,13 +210,32 @@ export function AuthPortal() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || googleSubmitting}
               className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
             >
               {submitting ? 'Memulakan Sesi...' : 'Masuk Portal Pembelajaran'}
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
+
+          <div className="mt-6 space-y-3 border-t border-slate-200 pt-5">
+            <p className="text-center text-xs font-medium text-slate-500">
+              Akses Pentadbir Berdaftar
+            </p>
+            <button
+              type="button"
+              onClick={handleAdminGoogleSignIn}
+              disabled={submitting || googleSubmitting}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-50/70 px-4 py-2.5 text-sm font-semibold text-emerald-900 transition-colors hover:bg-emerald-100 disabled:opacity-60"
+            >
+              <ShieldCheck className="h-4 w-4 text-emerald-700 shrink-0" />
+              <span>
+                {googleSubmitting
+                  ? 'Mengesahkan Akaun Google...'
+                  : 'LOG MASUK PENTADBIR (GOOGLE)'}
+              </span>
+            </button>
+          </div>
         </section>
       </main>
     </div>

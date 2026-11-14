@@ -1077,7 +1077,7 @@ export async function fetchAdminDashboardOverview(): Promise<{
 
 export async function adminUpdateUserProfile(
   targetUserId: string,
-  updates: {is_active?: boolean; role?: UserRole; full_name?: string; institution?: string}
+  updates: {is_active?: boolean; role?: UserRole; full_name?: string; class?: string}
 ): Promise<Profile> {
   const docPath = `profiles/${targetUserId}`;
   const docRef = doc(db, 'profiles', targetUserId);

@@ -59,7 +59,8 @@ export function AppShell({
   breadcrumb,
   children,
 }: AppShellProps) {
-  const {profile, isAdminUser, signOut} = useAuth();
+  const {user, profile, isAdminUser, signOut} = useAuth();
+  const displayName = profile?.full_name || user?.displayName || 'Pengguna';
   const isAdmin = isAdminUser || profile?.role === 'ADMIN';
   const navItems = isAdmin ? ADMIN_NAV : STUDENT_NAV;
   const mobileItems = navItems.slice(0, 5);
@@ -114,7 +115,7 @@ export function AppShell({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">
-                {profile?.full_name || 'Pengguna'}
+                {displayName}
               </p>
               <p className="truncate text-xs text-slate-500">
                 Peranan: {profile?.role || 'PELAJAR'}
@@ -152,7 +153,7 @@ export function AppShell({
 
           <div className="flex items-center gap-3 shrink-0">
             <span className="hidden sm:inline text-xs font-medium text-slate-600">
-              {profile?.full_name} · {profile?.role === 'ADMIN' ? 'Admin' : 'Pelajar'}
+              {displayName} · {isAdmin ? 'Admin' : 'Pelajar'}
             </span>
             <button
               type="button"

@@ -49,24 +49,27 @@ service cloud.firestore {
     // PENGESAHAN SKEMA ENTITI (ANTI-UPDATE-GAP & PAYLOAD POISONING GUARD)
     // -------------------------------------------------------------------------
     function isValidProfile(data) {
-      return data.keys().hasAll(['id', 'full_name', 'email', 'role', 'is_active', 'created_at', 'updated_at'])
-        && data.keys().hasOnly(['id', 'full_name', 'email', 'role', 'avatar_url', 'institution', 'is_active', 'created_at', 'updated_at'])
+      return data.keys().hasAll(['id', 'full_name', 'class', 'role', 'is_active', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'full_name', 'class', 'role', 'is_active', 'created_at', 'updated_at'])
         && isValidId(data.id)
         && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 120
-        && data.email is string && data.email.size() <= 160
-        && data.role in ['ADMIN', 'PELAJAR']
+        && data.class is string
+        && (
+          (data.role == 'ADMIN' && data.class.size() <= 160)
+          || (data.role == 'PELAJAR' && data.class.size() >= 1 && data.class.size() <= 160)
+        )
         && data.is_active is bool
-        && isOptionalString(data, 'avatar_url', 500)
-        && isOptionalString(data, 'institution', 160);
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
     }
 
     function isValidModule(data) {
       return data.keys().hasAll(['id', 'code', 'title', 'slug', 'description', 'icon_name', 'sort_order', 'status', 'created_at', 'updated_at'])
         && data.keys().hasOnly(['id', 'code', 'title', 'slug', 'description', 'icon_name', 'sort_order', 'status', 'created_by', 'created_at', 'updated_at'])
         && isValidId(data.id)
-        && data.code is string && data.code.size() >= 2 && data.code.size() <= 40
-        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
-        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 160
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 40
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 160
         && data.description is string && data.description.size() <= 1200
         && data.icon_name is string && data.icon_name.size() <= 50
         && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000
@@ -79,8 +82,8 @@ service cloud.firestore {
         && data.keys().hasOnly(['id', 'module_id', 'title', 'slug', 'description', 'learning_objectives', 'sort_order', 'estimated_minutes', 'status', 'created_at', 'updated_at'])
         && isValidId(data.id)
         && isValidId(data.module_id)
-        && data.title is string && data.title.size() >= 2 && data.title.size() <= 200
-        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 200
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 200
         && data.description is string && data.description.size() <= 1500
         && data.learning_objectives is list && data.learning_objectives.size() <= 20
         && (data.learning_objectives.size() == 0 || (data.learning_objectives[0] is string && data.learning_objectives[0].size() <= 300))
@@ -248,7 +251,8 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    // Profil pengguna: Pelajar hanya boleh baca/kemas kini profil sendiri tanpa ubah role/is_active
+    // Profil pengguna: Pelajar hanya perlukan id, full_name, class, role, is_active, created_at & updated_at.
+    // Medan email dan institution telah dibuang; pelajar tidak boleh menukar peranan sendiri menjadi ADMIN.
     match /profiles/{uid} {
       allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
       allow list: if isSignedIn() && (existing().id == request.auth.uid || isAdmin());
@@ -258,18 +262,35 @@ service cloud.firestore {
         && incoming().id == uid
         && incoming().created_at == request.time
         && incoming().updated_at == request.time
-        && ((incoming().role == 'PELAJAR' && incoming().is_active == true) || isAdmin());
+        && (
+          (incoming().role == 'PELAJAR' && incoming().is_active == true)
+          || (isAdmin() && incoming().role == 'ADMIN')
+        );
       allow update: if isSignedIn() && isValidId(uid)
         && isValidProfile(incoming())
         && incoming().id == existing().id
         && incoming().created_at == existing().created_at
         && incoming().updated_at == request.time
         && (
-          isAdmin() || (
+          (
+            isAdmin()
+            && (
+              (
+                request.auth.uid == uid
+                && incoming().role == 'ADMIN'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'class', 'role', 'is_active', 'updated_at'])
+              ) || (
+                incoming().role == existing().role
+                && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'class', 'is_active', 'updated_at'])
+              )
+            )
+          ) || (
             request.auth.uid == uid
+            && existing().role == 'PELAJAR'
+            && incoming().role == 'PELAJAR'
             && incoming().role == existing().role
             && incoming().is_active == existing().is_active
-            && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'email', 'institution', 'avatar_url', 'updated_at'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'class', 'updated_at'])
           )
         );
       allow delete: if isAdmin() && isValidId(uid);
@@ -344,6 +365,7 @@ service cloud.firestore {
       allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
       allow create: if isAdmin() && isValidId(materialId) && isValidMaterial(incoming())
         && incoming().id == materialId
+        && exists(/databases/$(database)/documents/modules/$(incoming().module_id))
         && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
         && incoming().created_at == request.time
         && incoming().updated_at == request.time;
@@ -402,7 +424,7 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(optionId);
     }
 
-    // Percubaan kuiz pelajar
+    // Percubaan kuiz pelajar (Hanya pelajar berkenaan dan ADMIN boleh melihat)
     match /quiz_attempts/{attemptId} {
       allow get: if isSignedIn() && isValidId(attemptId) && (existing().student_id == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
@@ -414,10 +436,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/quizzes/$(incoming().quiz_id)).data.status == 'Published'
         && incoming().created_at == request.time
         && incoming().updated_at == request.time;
-      allow update, delete: if isAdmin() && isValidId(attemptId);
+      allow update: if isAdmin() && isValidId(attemptId)
+        && isValidQuizAttempt(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(attemptId);
     }
 
-    // Jawapan terperinci kuiz pelajar
+    // Jawapan terperinci kuiz pelajar (Hanya pelajar berkenaan dan ADMIN boleh melihat)
     match /quiz_answers/{answerId} {
       allow get: if isSignedIn() && isValidId(answerId) && (existing().student_id == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
@@ -426,22 +453,30 @@ service cloud.firestore {
         && incoming().id == answerId
         && incoming().student_id == request.auth.uid
         && existsAfter(/databases/$(database)/documents/quiz_attempts/$(incoming().attempt_id))
+        && getAfter(/databases/$(database)/documents/quiz_attempts/$(incoming().attempt_id)).data.student_id == request.auth.uid
         && incoming().created_at == request.time
         && incoming().updated_at == request.time;
-      allow update, delete: if isAdmin() && isValidId(answerId);
+      allow update: if isAdmin() && isValidId(answerId)
+        && isValidQuizAnswer(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(answerId);
     }
 
-    // Rekod kemajuan topik pelajar
+    // Rekod kemajuan topik pelajar (Hanya pelajar berkenaan dan ADMIN boleh melihat)
     match /learning_progress/{progressId} {
       allow get: if isSignedIn() && isValidId(progressId) && (
+        isAdmin() ||
         (resource == null && progressId.matches('^' + request.auth.uid + '_[a-zA-Z0-9_\\-]+$')) ||
-        (resource != null && (existing().student_id == request.auth.uid || isAdmin()))
+        (resource != null && existing().student_id == request.auth.uid)
       );
       allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isValidId(progressId)
         && isValidLearningProgress(incoming())
         && incoming().id == progressId
         && incoming().student_id == request.auth.uid
+        && exists(/databases/$(database)/documents/modules/$(incoming().module_id))
         && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
         && incoming().created_at == request.time
         && incoming().updated_at == request.time;
@@ -462,7 +497,7 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(progressId);
     }
 
-    // Log aktiviti pembelajaran
+    // Log aktiviti pembelajaran (Hanya pengguna berkenaan dan ADMIN boleh melihat)
     match /activity_logs/{logId} {
       allow get: if isSignedIn() && isValidId(logId) && (existing().user_id == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
@@ -472,7 +507,12 @@ service cloud.firestore {
         && incoming().user_id == request.auth.uid
         && incoming().created_at == request.time
         && incoming().updated_at == request.time;
-      allow update, delete: if isAdmin() && isValidId(logId);
+      allow update: if isAdmin() && isValidId(logId)
+        && isValidActivityLog(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(logId);
     }
   }
 }

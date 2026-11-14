@@ -13,20 +13,18 @@
     },
     "Profile": {
       "title": "Profile",
-      "description": "Profil pengguna I-KNOW 2.0 (Pelajar atau Admin).",
+      "description": "Profil pengguna I-KNOW (Pelajar atau Admin).",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "full_name": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "email": { "type": "string", "maxLength": 160 },
+        "class": { "type": "string", "minLength": 0, "maxLength": 160 },
         "role": { "type": "string", "enum": ["ADMIN", "PELAJAR"] },
-        "avatar_url": { "type": "string", "maxLength": 500 },
-        "institution": { "type": "string", "maxLength": 160 },
         "is_active": { "type": "boolean" },
         "created_at": { "type": "string", "format": "date-time" },
         "updated_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "full_name", "email", "role", "is_active", "created_at", "updated_at"]
+      "required": ["id", "full_name", "class", "role", "is_active", "created_at", "updated_at"]
     },
     "LearningModule": {
       "title": "LearningModule",

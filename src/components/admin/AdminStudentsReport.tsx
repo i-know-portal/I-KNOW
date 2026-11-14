@@ -57,9 +57,8 @@ export function AdminStudentsReport() {
         if (!q) return true;
         return (
           p.full_name.toLowerCase().includes(q) ||
-          p.email.toLowerCase().includes(q) ||
-          p.id.toLowerCase().includes(q) ||
-          (p.institution || '').toLowerCase().includes(q)
+          (p.class || p.institution || '').toLowerCase().includes(q) ||
+          p.id.toLowerCase().includes(q)
         );
       })
       .map((p) => {
@@ -141,7 +140,7 @@ export function AdminStudentsReport() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama, UID atau institusi..."
+            placeholder="Cari nama, kelas atau UID..."
             className="w-64 rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-emerald-600 focus:outline-none"
           />
         </div>
@@ -192,8 +191,7 @@ export function AdminStudentsReport() {
                   <td className="py-3 pr-4">
                     <p className="font-semibold text-slate-900">{row.profile.full_name}</p>
                     <p className="text-xs text-slate-500">
-                      {row.profile.email || 'Tiada e-mel'}
-                      {row.profile.institution ? ` · ${row.profile.institution}` : ''}
+                      Kelas: {row.profile.class || row.profile.institution || '—'}
                     </p>
                     <p className="text-[11px] text-slate-400 font-mono-tabular">
                       UID: {row.profile.id}

@@ -12,13 +12,14 @@ export type QuestionType = 'objective' | 'matching' | 'tajwid_identification';
 export interface Profile {
   id: string;
   full_name: string;
-  email: string;
+  class: string;
   role: UserRole;
-  avatar_url: string | null;
-  institution: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  email?: string;
+  institution?: string;
+  avatar_url?: string | null;
 }
 
 export interface LearningModule {
