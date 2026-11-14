@@ -1,0 +1,318 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Rekod pentadbir sah yang hanya ditetapkan melalui Firebase Console.",
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean" },
+        "email": { "type": "string", "maxLength": 160 },
+        "note": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["active"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "Profil pengguna I-KNOW 2.0 (Pelajar atau Admin).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "full_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["ADMIN", "PELAJAR"] },
+        "avatar_url": { "type": "string", "maxLength": 500 },
+        "institution": { "type": "string", "maxLength": 160 },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "full_name", "email", "role", "is_active", "created_at", "updated_at"]
+    },
+    "LearningModule": {
+      "title": "LearningModule",
+      "description": "Modul pembelajaran utama seperti Solat dan Tajwid.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "code": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "slug": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 1200 },
+        "icon_name": { "type": "string", "maxLength": 50 },
+        "sort_order": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "created_by": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "code", "title", "slug", "sort_order", "status", "created_at", "updated_at"]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "Topik di bawah sesebuah modul pembelajaran.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "module_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "slug": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1500 },
+        "learning_objectives": { "type": "array" },
+        "sort_order": { "type": "integer" },
+        "estimated_minutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "module_id", "title", "slug", "sort_order", "estimated_minutes", "status", "created_at", "updated_at"]
+    },
+    "Subtopic": {
+      "title": "Subtopic",
+      "description": "Subtopik di bawah sesebuah topik.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "topic_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "sort_order": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "topic_id", "title", "sort_order", "status", "created_at", "updated_at"]
+    },
+    "ContentBlock": {
+      "title": "ContentBlock",
+      "description": "Blok nota, bacaan solat, contoh tajwid atau aktiviti pembelajaran.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "topic_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "subtopic_id": { "type": "string", "maxLength": 128 },
+        "block_type": { "type": "string", "enum": ["note", "objective", "activity", "prayer_recitation", "quran_tajwid"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "body": { "type": "string", "maxLength": 8000 },
+        "arabic_text": { "type": "string", "maxLength": 2000 },
+        "transliteration": { "type": "string", "maxLength": 1000 },
+        "translation": { "type": "string", "maxLength": 2000 },
+        "sort_order": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "topic_id", "block_type", "title", "sort_order", "status", "created_at", "updated_at"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Bahan pembelajaran pautan dokumen PDF, imej, audio, video atau YouTube.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "module_id": { "type": "string", "maxLength": 128 },
+        "topic_id": { "type": "string", "maxLength": 128 },
+        "subtopic_id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "material_type": { "type": "string", "enum": ["pdf", "image", "audio", "video", "youtube"] },
+        "file_url": { "type": "string", "maxLength": 1000 },
+        "youtube_url": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "uploaded_by": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "module_id", "topic_id", "title", "material_type", "status", "created_at", "updated_at"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "Kuiz interaktif bagi modul atau topik tertentu.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "module_id": { "type": "string", "maxLength": 128 },
+        "topic_id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "passing_score": { "type": "integer" },
+        "allow_retake": { "type": "boolean" },
+        "max_attempts": { "type": "integer" },
+        "time_limit_minutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Draft", "Published"] },
+        "created_by": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "module_id", "title", "passing_score", "allow_retake", "status", "created_at", "updated_at"]
+    },
+    "QuizQuestion": {
+      "title": "QuizQuestion",
+      "description": "Soalan kuiz objektif, padanan atau mengenal pasti hukum tajwid.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "quiz_id": { "type": "string", "maxLength": 128 },
+        "quiz_status": { "type": "string", "enum": ["Draft", "Published"] },
+        "question_type": { "type": "string", "enum": ["objective", "matching", "tajwid_identification"] },
+        "prompt": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "arabic_prompt": { "type": "string", "maxLength": 1000 },
+        "explanation": { "type": "string", "maxLength": 1500 },
+        "points": { "type": "integer" },
+        "sort_order": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "quiz_id", "quiz_status", "question_type", "prompt", "points", "sort_order", "created_at", "updated_at"]
+    },
+    "QuizOption": {
+      "title": "QuizOption",
+      "description": "Pilihan jawapan atau pasangan padanan bagi sesuatu soalan kuiz.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "quiz_id": { "type": "string", "maxLength": 128 },
+        "question_id": { "type": "string", "maxLength": 128 },
+        "quiz_status": { "type": "string", "enum": ["Draft", "Published"] },
+        "option_text": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "match_target": { "type": "string", "maxLength": 500 },
+        "is_correct": { "type": "boolean" },
+        "sort_order": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "quiz_id", "question_id", "quiz_status", "option_text", "is_correct", "sort_order", "created_at", "updated_at"]
+    },
+    "QuizAttempt": {
+      "title": "QuizAttempt",
+      "description": "Rekod percubaan dan pemarkahan kuiz oleh pelajar.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "quiz_id": { "type": "string", "maxLength": 128 },
+        "student_id": { "type": "string", "maxLength": 128 },
+        "score": { "type": "number" },
+        "total_points": { "type": "integer" },
+        "earned_points": { "type": "integer" },
+        "passed": { "type": "boolean" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "quiz_id", "student_id", "score", "total_points", "earned_points", "passed", "started_at", "completed_at", "created_at", "updated_at"]
+    },
+    "QuizAnswer": {
+      "title": "QuizAnswer",
+      "description": "Jawapan terperinci pelajar bagi setiap soalan dalam percubaan kuiz.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "attempt_id": { "type": "string", "maxLength": 128 },
+        "student_id": { "type": "string", "maxLength": 128 },
+        "question_id": { "type": "string", "maxLength": 128 },
+        "selected_option_id": { "type": "string", "maxLength": 128 },
+        "submitted_answer": { "type": "object" },
+        "is_correct": { "type": "boolean" },
+        "points_earned": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "attempt_id", "student_id", "question_id", "is_correct", "points_earned", "created_at", "updated_at"]
+    },
+    "LearningProgress": {
+      "title": "LearningProgress",
+      "description": "Status kemajuan topik pembelajaran bagi setiap pelajar.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "student_id": { "type": "string", "maxLength": 128 },
+        "module_id": { "type": "string", "maxLength": 128 },
+        "topic_id": { "type": "string", "maxLength": 128 },
+        "subtopic_id": { "type": "string", "maxLength": 128 },
+        "is_completed": { "type": "boolean" },
+        "completion_percent": { "type": "integer" },
+        "last_accessed_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "student_id", "module_id", "topic_id", "is_completed", "completion_percent", "last_accessed_at", "created_at", "updated_at"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log aktiviti pembelajaran pelajar.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128 },
+        "module_id": { "type": "string", "maxLength": 128 },
+        "topic_id": { "type": "string", "maxLength": 128 },
+        "quiz_id": { "type": "string", "maxLength": 128 },
+        "action_type": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "metadata": { "type": "object" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user_id", "action_type", "description", "created_at", "updated_at"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Senarai pentadbir sah yang hanya boleh ditambah melalui Firebase Console."
+    },
+    "/profiles/{uid}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "Profil pengguna berdaftar mengikut UID Firebase Authentication."
+    },
+    "/modules/{moduleId}": {
+      "schema": { "$ref": "#/entities/LearningModule" },
+      "description": "Koleksi modul pembelajaran utama."
+    },
+    "/topics/{topicId}": {
+      "schema": { "$ref": "#/entities/Topic" },
+      "description": "Koleksi topik pembelajaran."
+    },
+    "/subtopics/{subtopicId}": {
+      "schema": { "$ref": "#/entities/Subtopic" },
+      "description": "Koleksi subtopik pembelajaran."
+    },
+    "/content_blocks/{blockId}": {
+      "schema": { "$ref": "#/entities/ContentBlock" },
+      "description": "Koleksi nota, lafaz bacaan, contoh tajwid dan aktiviti."
+    },
+    "/materials/{materialId}": {
+      "schema": { "$ref": "#/entities/Material" },
+      "description": "Koleksi bahan pembelajaran (PDF, imej, audio, video URL dan YouTube)."
+    },
+    "/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "Koleksi kuiz interaktif."
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/QuizQuestion" },
+      "description": "Koleksi soalan kuiz."
+    },
+    "/quiz_options/{optionId}": {
+      "schema": { "$ref": "#/entities/QuizOption" },
+      "description": "Koleksi pilihan jawapan dan padanan kuiz."
+    },
+    "/quiz_attempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/QuizAttempt" },
+      "description": "Rekod percubaan kuiz pelajar."
+    },
+    "/quiz_answers/{answerId}": {
+      "schema": { "$ref": "#/entities/QuizAnswer" },
+      "description": "Rekod jawapan pelajar bagi setiap soalan."
+    },
+    "/learning_progress/{progressId}": {
+      "schema": { "$ref": "#/entities/LearningProgress" },
+      "description": "Rekod kemajuan topik pelajar."
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Log aktiviti pembelajaran pengguna."
+    }
+  }
+}

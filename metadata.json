@@ -1,0 +1,6 @@
+{
+  "name": "I-KNOW 2.0",
+  "description": "Islamic Knowledge & Learning · Pusat Pembelajaran Ilmu Islam — Platform pembelajaran digital Solat dan Tajwid secara sistematik, interaktif dan kendiri.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,478 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Jaring Keselamatan Global (Tolak semua secara lalai)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // FUNGSI PEMBANTU KESELAMATAN
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Peranan ADMIN hanya ditentukan oleh dokumen dalam koleksi /admins/{uid}
+    // yang hanya boleh ditambah melalui Firebase Console (bukan oleh client).
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptionalId(data, field) {
+      return !(field in data) || data[field] == null || isValidId(data[field]);
+    }
+
+    function isOptionalIntRange(data, field, minVal, maxVal) {
+      return !(field in data) || data[field] == null || (data[field] is int && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    // -------------------------------------------------------------------------
+    // PENGESAHAN SKEMA ENTITI (ANTI-UPDATE-GAP & PAYLOAD POISONING GUARD)
+    // -------------------------------------------------------------------------
+    function isValidProfile(data) {
+      return data.keys().hasAll(['id', 'full_name', 'email', 'role', 'is_active', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'full_name', 'email', 'role', 'avatar_url', 'institution', 'is_active', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 120
+        && data.email is string && data.email.size() <= 160
+        && data.role in ['ADMIN', 'PELAJAR']
+        && data.is_active is bool
+        && isOptionalString(data, 'avatar_url', 500)
+        && isOptionalString(data, 'institution', 160);
+    }
+
+    function isValidModule(data) {
+      return data.keys().hasAll(['id', 'code', 'title', 'slug', 'description', 'icon_name', 'sort_order', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'code', 'title', 'slug', 'description', 'icon_name', 'sort_order', 'status', 'created_by', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && data.code is string && data.code.size() >= 2 && data.code.size() <= 40
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 160
+        && data.description is string && data.description.size() <= 1200
+        && data.icon_name is string && data.icon_name.size() <= 50
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000
+        && data.status in ['Draft', 'Published']
+        && isOptionalId(data, 'created_by');
+    }
+
+    function isValidTopic(data) {
+      return data.keys().hasAll(['id', 'module_id', 'title', 'slug', 'description', 'learning_objectives', 'sort_order', 'estimated_minutes', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'module_id', 'title', 'slug', 'description', 'learning_objectives', 'sort_order', 'estimated_minutes', 'status', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.module_id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 200
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 200
+        && data.description is string && data.description.size() <= 1500
+        && data.learning_objectives is list && data.learning_objectives.size() <= 20
+        && (data.learning_objectives.size() == 0 || (data.learning_objectives[0] is string && data.learning_objectives[0].size() <= 300))
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000
+        && data.estimated_minutes is int && data.estimated_minutes >= 1 && data.estimated_minutes <= 600
+        && data.status in ['Draft', 'Published'];
+    }
+
+    function isValidSubtopic(data) {
+      return data.keys().hasAll(['id', 'topic_id', 'title', 'summary', 'sort_order', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'topic_id', 'title', 'summary', 'sort_order', 'status', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.topic_id)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.summary is string && data.summary.size() <= 1000
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000
+        && data.status in ['Draft', 'Published'];
+    }
+
+    function isValidContentBlock(data) {
+      return data.keys().hasAll(['id', 'topic_id', 'block_type', 'title', 'body', 'sort_order', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'topic_id', 'subtopic_id', 'block_type', 'title', 'body', 'arabic_text', 'transliteration', 'translation', 'sort_order', 'status', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.topic_id)
+        && isOptionalId(data, 'subtopic_id')
+        && data.block_type in ['note', 'objective', 'activity', 'prayer_recitation', 'quran_tajwid']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.body is string && data.body.size() <= 8000
+        && isOptionalString(data, 'arabic_text', 2000)
+        && isOptionalString(data, 'transliteration', 1000)
+        && isOptionalString(data, 'translation', 2000)
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000
+        && data.status in ['Draft', 'Published'];
+    }
+
+    function isValidMaterial(data) {
+      return data.keys().hasAll(['id', 'module_id', 'topic_id', 'title', 'description', 'material_type', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'module_id', 'topic_id', 'subtopic_id', 'title', 'description', 'material_type', 'storage_path', 'file_url', 'youtube_url', 'mime_type', 'file_size_bytes', 'status', 'uploaded_by', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.module_id)
+        && isValidId(data.topic_id)
+        && isOptionalId(data, 'subtopic_id')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 1000
+        && data.material_type in ['pdf', 'image', 'audio', 'video', 'youtube']
+        && isOptionalString(data, 'storage_path', 400)
+        && isOptionalString(data, 'file_url', 1000)
+        && isOptionalString(data, 'youtube_url', 500)
+        && isOptionalString(data, 'mime_type', 120)
+        && isOptionalIntRange(data, 'file_size_bytes', 0, 1000000000)
+        && data.status in ['Draft', 'Published']
+        && isOptionalId(data, 'uploaded_by');
+    }
+
+    function isValidQuiz(data) {
+      return data.keys().hasAll(['id', 'module_id', 'title', 'description', 'passing_score', 'allow_retake', 'status', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'module_id', 'topic_id', 'title', 'description', 'passing_score', 'allow_retake', 'max_attempts', 'time_limit_minutes', 'status', 'created_by', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.module_id)
+        && isOptionalId(data, 'topic_id')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 1000
+        && data.passing_score is int && data.passing_score >= 0 && data.passing_score <= 100
+        && data.allow_retake is bool
+        && isOptionalIntRange(data, 'max_attempts', 1, 100)
+        && isOptionalIntRange(data, 'time_limit_minutes', 1, 300)
+        && data.status in ['Draft', 'Published']
+        && isOptionalId(data, 'created_by');
+    }
+
+    function isValidQuestion(data) {
+      return data.keys().hasAll(['id', 'quiz_id', 'quiz_status', 'question_type', 'prompt', 'explanation', 'points', 'sort_order', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'quiz_id', 'quiz_status', 'question_type', 'prompt', 'arabic_prompt', 'explanation', 'points', 'sort_order', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.quiz_id)
+        && data.quiz_status in ['Draft', 'Published']
+        && data.question_type in ['objective', 'matching', 'tajwid_identification']
+        && data.prompt is string && data.prompt.size() >= 1 && data.prompt.size() <= 1000
+        && isOptionalString(data, 'arabic_prompt', 1000)
+        && data.explanation is string && data.explanation.size() <= 1500
+        && data.points is int && data.points >= 1 && data.points <= 1000
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 1000;
+    }
+
+    function isValidQuizOption(data) {
+      return data.keys().hasAll(['id', 'quiz_id', 'question_id', 'quiz_status', 'option_text', 'is_correct', 'sort_order', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'quiz_id', 'question_id', 'quiz_status', 'option_text', 'match_target', 'is_correct', 'sort_order', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.quiz_id)
+        && isValidId(data.question_id)
+        && data.quiz_status in ['Draft', 'Published']
+        && data.option_text is string && data.option_text.size() >= 1 && data.option_text.size() <= 500
+        && isOptionalString(data, 'match_target', 500)
+        && data.is_correct is bool
+        && data.sort_order is int && data.sort_order >= 1 && data.sort_order <= 100;
+    }
+
+    function isValidQuizAttempt(data) {
+      return data.keys().hasAll(['id', 'quiz_id', 'student_id', 'score', 'total_points', 'earned_points', 'passed', 'started_at', 'completed_at', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'quiz_id', 'student_id', 'score', 'total_points', 'earned_points', 'passed', 'started_at', 'completed_at', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.quiz_id)
+        && isValidId(data.student_id)
+        && (data.score is int || data.score is float) && data.score >= 0 && data.score <= 100
+        && data.total_points is int && data.total_points >= 0 && data.total_points <= 10000
+        && data.earned_points is int && data.earned_points >= 0 && data.earned_points <= 10000
+        && data.passed is bool
+        && data.started_at is string && data.started_at.size() <= 40
+        && data.completed_at is string && data.completed_at.size() <= 40;
+    }
+
+    function isValidQuizAnswer(data) {
+      return data.keys().hasAll(['id', 'attempt_id', 'student_id', 'question_id', 'submitted_answer', 'is_correct', 'points_earned', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'attempt_id', 'student_id', 'question_id', 'selected_option_id', 'submitted_answer', 'is_correct', 'points_earned', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.attempt_id)
+        && isValidId(data.student_id)
+        && isValidId(data.question_id)
+        && isOptionalId(data, 'selected_option_id')
+        && data.submitted_answer is map
+        && data.is_correct is bool
+        && data.points_earned is int && data.points_earned >= 0 && data.points_earned <= 1000;
+    }
+
+    function isValidLearningProgress(data) {
+      return data.keys().hasAll(['id', 'student_id', 'module_id', 'topic_id', 'is_completed', 'completion_percent', 'last_accessed_at', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'student_id', 'module_id', 'topic_id', 'subtopic_id', 'is_completed', 'completion_percent', 'last_accessed_at', 'completed_at', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.student_id)
+        && isValidId(data.module_id)
+        && isValidId(data.topic_id)
+        && isOptionalId(data, 'subtopic_id')
+        && data.is_completed is bool
+        && data.completion_percent is int && data.completion_percent >= 0 && data.completion_percent <= 100
+        && data.last_accessed_at is string && data.last_accessed_at.size() <= 40
+        && isOptionalString(data, 'completed_at', 40);
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['id', 'user_id', 'action_type', 'description', 'metadata', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['id', 'user_id', 'module_id', 'topic_id', 'quiz_id', 'action_type', 'description', 'metadata', 'created_at', 'updated_at'])
+        && isValidId(data.id)
+        && isValidId(data.user_id)
+        && isOptionalId(data, 'module_id')
+        && isOptionalId(data, 'topic_id')
+        && isOptionalId(data, 'quiz_id')
+        && data.action_type is string && data.action_type.size() >= 1 && data.action_type.size() <= 80
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 500
+        && data.metadata is map;
+    }
+
+    // -------------------------------------------------------------------------
+    // POLISI KOLEKSI FIRESTORE
+    // -------------------------------------------------------------------------
+
+    // Semakan sambungan kesihatan Firestore
+    match /system/health {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Senarai pentadbir (Hanya diurus terus dalam Firebase Console)
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    // Profil pengguna: Pelajar hanya boleh baca/kemas kini profil sendiri tanpa ubah role/is_active
+    match /profiles/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if isSignedIn() && (existing().id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(uid)
+        && request.auth.uid == uid
+        && isValidProfile(incoming())
+        && incoming().id == uid
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time
+        && ((incoming().role == 'PELAJAR' && incoming().is_active == true) || isAdmin());
+      allow update: if isSignedIn() && isValidId(uid)
+        && isValidProfile(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && (
+          isAdmin() || (
+            request.auth.uid == uid
+            && incoming().role == existing().role
+            && incoming().is_active == existing().is_active
+            && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'email', 'institution', 'avatar_url', 'updated_at'])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(uid);
+    }
+
+    // Modul pembelajaran
+    match /modules/{moduleId} {
+      allow get: if isSignedIn() && isValidId(moduleId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(moduleId) && isValidModule(incoming())
+        && incoming().id == moduleId
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(moduleId) && isValidModule(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(moduleId);
+    }
+
+    // Topik pembelajaran
+    match /topics/{topicId} {
+      allow get: if isSignedIn() && isValidId(topicId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(topicId) && isValidTopic(incoming())
+        && incoming().id == topicId
+        && exists(/databases/$(database)/documents/modules/$(incoming().module_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(topicId) && isValidTopic(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(topicId);
+    }
+
+    // Subtopik
+    match /subtopics/{subtopicId} {
+      allow get: if isSignedIn() && isValidId(subtopicId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(subtopicId) && isValidSubtopic(incoming())
+        && incoming().id == subtopicId
+        && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(subtopicId) && isValidSubtopic(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(subtopicId);
+    }
+
+    // Blok kandungan (nota, bacaan solat, tajwid, aktiviti)
+    match /content_blocks/{blockId} {
+      allow get: if isSignedIn() && isValidId(blockId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(blockId) && isValidContentBlock(incoming())
+        && incoming().id == blockId
+        && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(blockId) && isValidContentBlock(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(blockId);
+    }
+
+    // Bahan pembelajaran (Pautan PDF, Imej, Audio, Video, YouTube)
+    match /materials/{materialId} {
+      allow get: if isSignedIn() && isValidId(materialId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(materialId) && isValidMaterial(incoming())
+        && incoming().id == materialId
+        && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(materialId) && isValidMaterial(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(materialId);
+    }
+
+    // Kuiz
+    match /quizzes/{quizId} {
+      allow get: if isSignedIn() && isValidId(quizId) && (existing().status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(quizId) && isValidQuiz(incoming())
+        && incoming().id == quizId
+        && exists(/databases/$(database)/documents/modules/$(incoming().module_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(quizId) && isValidQuiz(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(quizId);
+    }
+
+    // Soalan kuiz
+    match /questions/{questionId} {
+      allow get: if isSignedIn() && isValidId(questionId) && (existing().quiz_status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().quiz_status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(questionId) && isValidQuestion(incoming())
+        && incoming().id == questionId
+        && exists(/databases/$(database)/documents/quizzes/$(incoming().quiz_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(questionId) && isValidQuestion(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(questionId);
+    }
+
+    // Pilihan jawapan kuiz
+    match /quiz_options/{optionId} {
+      allow get: if isSignedIn() && isValidId(optionId) && (existing().quiz_status == 'Published' || isAdmin());
+      allow list: if isSignedIn() && (existing().quiz_status == 'Published' || isAdmin());
+      allow create: if isAdmin() && isValidId(optionId) && isValidQuizOption(incoming())
+        && incoming().id == optionId
+        && exists(/databases/$(database)/documents/questions/$(incoming().question_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isAdmin() && isValidId(optionId) && isValidQuizOption(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time;
+      allow delete: if isAdmin() && isValidId(optionId);
+    }
+
+    // Percubaan kuiz pelajar
+    match /quiz_attempts/{attemptId} {
+      allow get: if isSignedIn() && isValidId(attemptId) && (existing().student_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(attemptId)
+        && isValidQuizAttempt(incoming())
+        && incoming().id == attemptId
+        && incoming().student_id == request.auth.uid
+        && exists(/databases/$(database)/documents/quizzes/$(incoming().quiz_id))
+        && get(/databases/$(database)/documents/quizzes/$(incoming().quiz_id)).data.status == 'Published'
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update, delete: if isAdmin() && isValidId(attemptId);
+    }
+
+    // Jawapan terperinci kuiz pelajar
+    match /quiz_answers/{answerId} {
+      allow get: if isSignedIn() && isValidId(answerId) && (existing().student_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(answerId)
+        && isValidQuizAnswer(incoming())
+        && incoming().id == answerId
+        && incoming().student_id == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/quiz_attempts/$(incoming().attempt_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update, delete: if isAdmin() && isValidId(answerId);
+    }
+
+    // Rekod kemajuan topik pelajar
+    match /learning_progress/{progressId} {
+      allow get: if isSignedIn() && isValidId(progressId) && (
+        (resource == null && progressId.matches('^' + request.auth.uid + '_[a-zA-Z0-9_\\-]+$')) ||
+        (resource != null && (existing().student_id == request.auth.uid || isAdmin()))
+      );
+      allow list: if isSignedIn() && (existing().student_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(progressId)
+        && isValidLearningProgress(incoming())
+        && incoming().id == progressId
+        && incoming().student_id == request.auth.uid
+        && exists(/databases/$(database)/documents/topics/$(incoming().topic_id))
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isSignedIn() && isValidId(progressId)
+        && isValidLearningProgress(incoming())
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && (
+          isAdmin() || (
+            existing().student_id == request.auth.uid
+            && incoming().student_id == existing().student_id
+            && incoming().module_id == existing().module_id
+            && incoming().topic_id == existing().topic_id
+            && incoming().diff(existing()).affectedKeys().hasOnly(['is_completed', 'completion_percent', 'last_accessed_at', 'completed_at', 'subtopic_id', 'updated_at'])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(progressId);
+    }
+
+    // Log aktiviti pembelajaran
+    match /activity_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (existing().user_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(logId)
+        && isValidActivityLog(incoming())
+        && incoming().id == logId
+        && incoming().user_id == request.auth.uid
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update, delete: if isAdmin() && isValidId(logId);
+    }
+  }
+}

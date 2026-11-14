@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ms">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>I-KNOW — Pusat Pembelajaran Ilmu Islam</title>
+    <meta
+      name="description"
+      content="Islamic Knowledge & Learning · Pusat Pembelajaran Ilmu Islam — Platform pembelajaran digital Solat dan Tajwid secara sistematik, interaktif dan kendiri."
+    />
+    <meta property="og:title" content="I-KNOW — Pusat Pembelajaran Ilmu Islam" />
+    <meta
+      property="og:description"
+      content="ILMU • AMALAN • PENGHAYATAN — Platform pembelajaran Solat dan Tajwid interaktif."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Restore SPA route redirected from GitHub Pages 404.html
+      (function (l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search
+            .slice(1)
+            .split('&')
+            .map(function (s) {
+              return s.replace(/~and~/g, '&');
+            })
+            .join('?');
+          window.history.replaceState(
+            null,
+            null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      })(window.location);
+    </script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-emerald-100 selection:text-emerald-900">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
