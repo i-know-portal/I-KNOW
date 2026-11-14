@@ -1,4 +1,5 @@
-name: Deploy I-KNOW 2.0 ke GitHub Pages
+
+name: Deploy I-KNOW ke GitHub Pages
 
 on:
   push:
@@ -17,33 +18,30 @@ concurrency:
 
 jobs:
   build:
-    name: Bina Aplikasi Statik Vite
+    name: Bina Aplikasi I-KNOW
     runs-on: ubuntu-latest
     steps:
       - name: Checkout kod sumber
         uses: actions/checkout@v4
 
-      - name: Sediakan Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Sediakan Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Pasang pakej npm
-        run: npm ci
+      - name: Pasang pakej
+        run: bun install
 
       - name: Semak TypeScript
-        run: npm run lint
+        run: bun run lint
 
-      - name: Bina aplikasi untuk GitHub Pages (/i-know/)
-        run: npm run build:gh
+      - name: Bina aplikasi
+        run: bun run build
         env:
-          VITE_BASE_PATH: /i-know/
+          VITE_BASE_PATH: /I-KNOW/
 
-      - name: Sediakan Pages
+      - name: Sediakan GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Muat naik artifak GitHub Pages
+      - name: Muat naik artifak
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
