@@ -1,6 +1,8 @@
-import {useState} from 'react';
-import {CheckCircle2, FileEdit, Monitor, Smartphone, X} from 'lucide-react';
+import {useMemo, useState} from 'react';
+import {CheckCircle2, FileEdit, Monitor, Smartphone, Tablet, X} from 'lucide-react';
+import {parseNoteContent} from '../../lib/noteTemplates';
 import type {ContentBlockType, PublishStatus} from '../../types/database';
+import {DalilDisplayCard} from '../common/DalilDisplayCard';
 import {NoteContentRenderer} from '../common/NoteContentRenderer';
 
 interface NotePreviewModalProps {
@@ -49,18 +51,19 @@ export function NotePreviewModal({
   onSaveDraft,
   onPublish,
 }: NotePreviewModalProps) {
-  const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
+  const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const parsed = useMemo(() => parseNoteContent(serializedBody), [serializedBody]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-3 sm:p-6">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-2xl">
-        {/* Header Pratonton & Penukar Desktop / Telefon */}
+        {/* Header Pratonton & Penukar Desktop / Tablet / Telefon */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3.5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-              Pratonton Nota Pelajar
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#064e3b]">
+              Pratonton Paparan Pelajar
             </p>
             <h3 className="text-sm font-bold text-slate-900">
               {title.trim() || 'Nota Tanpa Tajuk'}
@@ -74,24 +77,36 @@ export function NotePreviewModal({
                 onClick={() => setViewport('desktop')}
                 className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
                   viewport === 'desktop'
-                    ? 'bg-white text-emerald-800 shadow-xs'
+                    ? 'bg-white text-[#064e3b] shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Monitor className="h-3.5 w-3.5" />
-                Desktop
+                <span className="hidden sm:inline">Desktop</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewport('tablet')}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  viewport === 'tablet'
+                    ? 'bg-white text-[#064e3b] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Tablet className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Tablet</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewport('mobile')}
                 className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
                   viewport === 'mobile'
-                    ? 'bg-white text-emerald-800 shadow-xs'
+                    ? 'bg-white text-[#064e3b] shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Smartphone className="h-3.5 w-3.5" />
-                Telefon
+                <span className="hidden sm:inline">Telefon</span>
               </button>
             </div>
 
@@ -111,49 +126,40 @@ export function NotePreviewModal({
           <div
             className={`transition-all duration-200 ${
               viewport === 'mobile'
-                ? 'w-full max-w-[390px] rounded-[28px] border-4 border-slate-800 bg-slate-50 p-3 shadow-xl'
-                : 'w-full max-w-3xl'
+                ? 'w-full max-w-[390px] rounded-[28px] border-4 border-slate-800 bg-slate-50 p-4 shadow-xl'
+                : viewport === 'tablet'
+                  ? 'w-full max-w-[768px] rounded-[20px] border-2 border-slate-400 bg-slate-50 p-4 shadow-lg'
+                  : 'w-full max-w-3xl'
             }`}
           >
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-amber-700">
+            <article className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-[#064e3b]">
                   {getBlockTypeLabel(blockType)}
-                </p>
+                </span>
                 <span
-                  className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
-                    status === 'Published'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                  className={`font-semibold ${
+                    status === 'Published' ? 'text-[#047857]' : 'text-amber-700'
                   }`}
                 >
-                  {status === 'Published' ? 'Diterbitkan' : 'Draf'}
+                  Status: {status === 'Published' ? 'Diterbitkan' : 'Draf'}
                 </span>
               </div>
 
-              <h2 className="mt-1.5 text-xl font-bold text-slate-900">
+              <h2 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
                 {title.trim() || 'Tajuk Nota'}
               </h2>
 
-              {arabicText && (
-                <div className="mt-4 rounded-xl border border-amber-200/70 bg-amber-50/40 px-4 py-4 text-center">
-                  <p className="text-2xl sm:text-3xl font-arabic text-slate-900">
-                    {arabicText}
-                  </p>
-                  {transliteration && (
-                    <p className="mt-2 text-sm italic text-emerald-900">
-                      {transliteration}
-                    </p>
-                  )}
-                  {translation && (
-                    <p className="mt-1 text-xs text-slate-600">
-                      Maksud: {translation}
-                    </p>
-                  )}
-                </div>
-              )}
+              <DalilDisplayCard
+                arabicText={arabicText}
+                transliteration={transliteration}
+                translation={translation}
+                dalilKind={parsed.dalilKind}
+                dalilSource={parsed.dalilSource}
+                className="mt-5"
+              />
 
-              <div className="mt-4">
+              <div className="mt-5">
                 {serializedBody.trim() ? (
                   <NoteContentRenderer body={serializedBody} />
                 ) : (
@@ -169,7 +175,12 @@ export function NotePreviewModal({
         {/* Footer Tindakan */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3.5">
           <p className="text-xs text-slate-500">
-            Mod: {viewport === 'desktop' ? 'Paparan Desktop' : 'Paparan Telefon (390px)'}
+            Mod:{' '}
+            {viewport === 'desktop'
+              ? 'Paparan Desktop'
+              : viewport === 'tablet'
+                ? 'Paparan Tablet (768px)'
+                : 'Paparan Telefon (390px)'}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -195,7 +206,7 @@ export function NotePreviewModal({
                 type="button"
                 disabled={saving}
                 onClick={onPublish}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-4 py-2 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-60"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 {isEditing && status === 'Published'

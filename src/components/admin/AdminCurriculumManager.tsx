@@ -18,6 +18,7 @@ import {
   NOTE_TEMPLATES,
   parseNoteContent,
   serializeNoteContent,
+  type DalilKind,
   type NoteTemplateId,
 } from '../../lib/noteTemplates';
 import {
@@ -95,6 +96,8 @@ export function AdminCurriculumManager() {
   const [blockArabic, setBlockArabic] = useState('');
   const [blockTranslit, setBlockTranslit] = useState('');
   const [blockTranslation, setBlockTranslation] = useState('');
+  const [blockDalilKind, setBlockDalilKind] = useState<DalilKind>('general');
+  const [blockDalilSource, setBlockDalilSource] = useState('');
   const [blockSubtopicId, setBlockSubtopicId] = useState<string>('');
   const [blockStatus, setBlockStatus] = useState<PublishStatus>('Draft');
   const [blockSortOrder, setBlockSortOrder] = useState<number>(1);
@@ -142,6 +145,8 @@ export function AdminCurriculumManager() {
     setBlockArabic('');
     setBlockTranslit('');
     setBlockTranslation('');
+    setBlockDalilKind('general');
+    setBlockDalilSource('');
     setBlockSubtopicId('');
     setBlockStatus('Draft');
     if (!selectedTopicId) {
@@ -335,14 +340,20 @@ export function AdminCurriculumManager() {
     setBlockArabic('');
     setBlockTranslit('');
     setBlockTranslation('');
+    setBlockDalilKind('general');
+    setBlockDalilSource('');
     setBlockSubtopicId('');
     setBlockStatus('Draft');
     setBlockSortOrder(blocks.length + 1);
   };
 
   const serializedBlockBody = useMemo(
-    () => serializeNoteContent(blockBodyHtml, blockTemplateId),
-    [blockBodyHtml, blockTemplateId]
+    () =>
+      serializeNoteContent(blockBodyHtml, blockTemplateId, {
+        dalilKind: blockDalilKind,
+        dalilSource: blockDalilSource,
+      }),
+    [blockBodyHtml, blockTemplateId, blockDalilKind, blockDalilSource]
   );
 
   const persistContentBlock = async (targetStatus: PublishStatus) => {
@@ -364,7 +375,7 @@ export function AdminCurriculumManager() {
     if (hasBase64Media(blockBodyHtml)) {
       setNotice({
         type: 'error',
-        text: 'Fail gambar atau video Base64 tidak dibenarkan dalam Firestore. Sila muat naik media melalui butang INSERT IMAGE atau INSERT VIDEO.',
+        text: 'Fail imej, video atau audio Base64 tidak dibenarkan dalam Firestore. Sila muat naik media melalui butang INSERT IMAGE, INSERT VIDEO atau INSERT AUDIO.',
       });
       return;
     }
@@ -1023,17 +1034,54 @@ export function AdminCurriculumManager() {
                       }}
                     />
 
-                    {/* Medan Tambahan Lafaz Arab & Terjemahan (Pilihan untuk Solat/Tajwid) */}
-                    <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5">
-                      <p className="text-[11px] font-semibold text-slate-600">
-                        Medan Tambahan Lafaz Arab / Dalil (Pilihan)
-                      </p>
+                    {/* Medan Tambahan Lafaz Arab & Dalil (Pilihan untuk Solat/Tajwid) */}
+                    <div className="rounded-xl border border-[#e6dcc6] bg-[#fbf7ee]/70 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-[#5c4314]">
+                          Medan Dalil al-Quran / Hadis / Lafaz Arab (Pilihan)
+                        </p>
+                        <span className="text-[11px] text-[#6b5324]">
+                          Teks Arab dan terjemahan disimpan tepat seperti yang anda masukkan
+                        </span>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                            Jenis Dalil / Bacaan
+                          </label>
+                          <select
+                            value={blockDalilKind}
+                            onChange={(e) => setBlockDalilKind(e.target.value as DalilKind)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium"
+                          >
+                            <option value="general">Lafaz / Bacaan Umum</option>
+                            <option value="quran">Ayat al-Quran</option>
+                            <option value="hadith">Hadis Nabi SAW</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                            Sumber / Rujukan (Surah &amp; Ayat atau Perawi Hadis)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={180}
+                            value={blockDalilSource}
+                            onChange={(e) => setBlockDalilSource(e.target.value)}
+                            placeholder="cth: Surah al-Baqarah: 43 atau Riwayat al-Bukhari"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                          />
+                        </div>
+                      </div>
+
                       <input
                         type="text"
+                        dir="rtl"
                         value={blockArabic}
                         onChange={(e) => setBlockArabic(e.target.value)}
                         placeholder="Teks Arab (pilihan, cth: سُبْحَانَ رَبِّيَ الْعَظِيمِ)"
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-right font-arabic"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-right font-arabic"
                       />
 
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -1074,8 +1122,8 @@ export function AdminCurriculumManager() {
                           onClick={() => setPreviewOpen(true)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100"
                         >
-                          <Eye className="h-3.5 w-3.5 text-emerald-700" />
-                          Pratonton (Desktop / Telefon)
+                          <Eye className="h-3.5 w-3.5 text-[#064e3b]" />
+                          Pratonton (Desktop / Tablet / Telefon)
                         </button>
 
                         <button
@@ -1115,52 +1163,49 @@ export function AdminCurriculumManager() {
                       blocks.map((blk) => {
                         const parsed = parseNoteContent(blk.body);
                         const tplInfo = getTemplateById(parsed.templateId);
-                        const hasImage = /<img\b/i.test(blk.body);
-                        const hasVideo = /<video\b/i.test(blk.body);
+                        const mediaSummary = [
+                          /<img\b/i.test(blk.body) ? 'Gambar' : null,
+                          /<video\b/i.test(blk.body) ? 'Video' : null,
+                          /<audio\b/i.test(blk.body) ? 'Audio' : null,
+                        ].filter(Boolean);
                         return (
                           <div
                             key={blk.id}
-                            className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border p-3.5 ${
+                            className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border p-4 ${
                               editingBlockId === blk.id
-                                ? 'border-emerald-600 bg-emerald-50/30'
+                                ? 'border-[#064e3b] bg-[#f3faf6]'
                                 : 'border-slate-200 bg-white'
                             }`}
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                                 <span
-                                  className={`rounded px-2 py-0.5 font-semibold border ${
+                                  className={`font-semibold ${
                                     blk.status === 'Published'
-                                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                                      ? 'text-[#047857]'
+                                      : 'text-amber-700'
                                   }`}
                                 >
                                   {blk.status === 'Published' ? 'Diterbitkan' : 'Draf'}
                                 </span>
-                                <span className="font-medium text-amber-700">
-                                  {blk.block_type}
+                                <span aria-hidden="true" className="text-slate-300">·</span>
+                                <span className="font-medium text-slate-600">
+                                  {parsed.isRichHtml ? tplInfo.name : blk.block_type}
                                 </span>
-                                {parsed.isRichHtml && (
-                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
-                                    {tplInfo.name}
-                                  </span>
-                                )}
-                                {hasImage && (
-                                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
-                                    Bergambar
-                                  </span>
-                                )}
-                                {hasVideo && (
-                                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
-                                    Video
-                                  </span>
+                                {mediaSummary.length > 0 && (
+                                  <>
+                                    <span aria-hidden="true" className="text-slate-300">·</span>
+                                    <span className="text-slate-500">
+                                      Media: {mediaSummary.join(', ')}
+                                    </span>
+                                  </>
                                 )}
                               </div>
                               <p className="mt-1 text-sm font-semibold text-slate-900">
                                 {blk.title}
                               </p>
                               {blk.arabic_text && (
-                                <p className="mt-1 text-lg font-arabic text-slate-800">
+                                <p dir="rtl" className="mt-1 text-lg font-arabic text-slate-800">
                                   {blk.arabic_text}
                                 </p>
                               )}
@@ -1174,7 +1219,7 @@ export function AdminCurriculumManager() {
                                 type="button"
                                 onClick={() => setPreviewSavedBlock(blk)}
                                 title="Pratonton Nota"
-                                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-emerald-800 hover:bg-slate-50"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-[#064e3b] hover:bg-slate-50"
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </button>
@@ -1183,12 +1228,12 @@ export function AdminCurriculumManager() {
                                 onClick={() => handleToggleBlockPublish(blk)}
                                 title={
                                   blk.status === 'Published'
-                                    ? 'Tukar kepada Draf'
+                                    ? 'Nyahterbitkan (Tukar ke Draf)'
                                     : 'Terbitkan Nota'
                                 }
                                 className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
                               >
-                                {blk.status === 'Published' ? 'Jadikan Draf' : 'Terbitkan'}
+                                {blk.status === 'Published' ? 'Nyahterbitkan' : 'Terbitkan'}
                               </button>
                               <button
                                 type="button"
@@ -1202,6 +1247,8 @@ export function AdminCurriculumManager() {
                                   setBlockArabic(blk.arabic_text || '');
                                   setBlockTranslit(blk.transliteration || '');
                                   setBlockTranslation(blk.translation || '');
+                                  setBlockDalilKind(p.dalilKind);
+                                  setBlockDalilSource(p.dalilSource);
                                   setBlockSubtopicId(blk.subtopic_id || '');
                                   setBlockStatus(blk.status);
                                   setBlockSortOrder(blk.sort_order);

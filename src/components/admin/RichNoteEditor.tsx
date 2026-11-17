@@ -7,11 +7,14 @@ import {
   Bold,
   Check,
   Columns,
+  Eye,
   FileText,
   Film,
+  Headphones,
   Highlighter,
   ImagePlus,
   Italic,
+  Languages,
   LayoutTemplate,
   List,
   ListOrdered,
@@ -36,14 +39,17 @@ import {
   getTemplateById,
   NOTE_TEMPLATES,
   serializeNoteContent,
+  type NoteTemplateDefinition,
   type NoteTemplateId,
 } from '../../lib/noteTemplates';
 import {formatBytes} from '../../lib/youtube';
 import {
+  uploadNoteAudio,
   uploadNoteImage,
   uploadNoteVideo,
   type UploadProgressInfo,
 } from '../../services/storageService';
+import {NoteContentRenderer} from '../common/NoteContentRenderer';
 
 interface RichNoteEditorProps {
   topicId: string;
@@ -54,7 +60,7 @@ interface RichNoteEditorProps {
 }
 
 interface SelectedMediaState {
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   figure: HTMLElement;
   src: string;
   widthPercent: number;
@@ -74,15 +80,16 @@ const FONT_SIZES = ['12px', '14px', '16px', '18px', '20px', '24px', '28px'];
 
 const TEXT_COLORS = [
   {label: 'Gelap', value: '#0f172a'},
+  {label: 'Hijau I-KNOW', value: '#064e3b'},
   {label: 'Zamrud', value: '#047857'},
   {label: 'Emas', value: '#b45309'},
   {label: 'Biru', value: '#1d4ed8'},
   {label: 'Merah', value: '#b91c1c'},
-  {label: 'Ungu', value: '#6d28d9'},
 ];
 
 const HIGHLIGHT_COLORS = [
   {label: 'Tiada', value: 'transparent'},
+  {label: 'Krim Lembut', value: '#fbf7ee'},
   {label: 'Kuning Lembut', value: '#fef08a'},
   {label: 'Hijau Lembut', value: '#bbf7d0'},
   {label: 'Biru Lembut', value: '#bfdbfe'},
@@ -109,6 +116,8 @@ export function RichNoteEditor({
   const replaceImageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const replaceVideoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const replaceAudioInputRef = useRef<HTMLInputElement>(null);
   const activeUploadTaskRef = useRef<UploadTask | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const previewVideoBoxRef = useRef<HTMLDivElement>(null);
@@ -120,6 +129,7 @@ export function RichNoteEditor({
 
   const [showTemplates, setShowTemplates] = useState(showTemplatePickerInitially);
   const [pendingTemplateId, setPendingTemplateId] = useState<NoteTemplateId | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<NoteTemplateDefinition | null>(null);
 
   // Keadaan format aktif pada toolbar
   const [activeFormats, setActiveFormats] = useState({
@@ -131,6 +141,7 @@ export function RichNoteEditor({
     left: false,
     center: false,
     right: false,
+    rtl: false,
     block: 'p',
   });
   const [insideTable, setInsideTable] = useState(false);
@@ -144,11 +155,11 @@ export function RichNoteEditor({
   const [highlightOpen, setHighlightOpen] = useState(false);
 
   // Keadaan muat naik media ke Firebase Storage
-  const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | null>(null);
+  const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | 'audio' | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressInfo | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
-  // Drawer pratonton video sebelum/selepas muat naik
+  // Drawer pratonton video sebelum dimasukkan
   const [videoDrawerOpen, setVideoDrawerOpen] = useState(false);
   const [stagedVideo, setStagedVideo] = useState<{
     url: string;
@@ -159,7 +170,23 @@ export function RichNoteEditor({
   } | null>(null);
   const [previewVideoPlaying, setPreviewVideoPlaying] = useState(false);
 
-  // Media yang sedang dipilih dalam editor (untuk ubah saiz, kedudukan, kapsyen, ganti, padam)
+  // Drawer muat naik & pratonton audio sebelum dimasukkan
+  const [audioDrawerOpen, setAudioDrawerOpen] = useState(false);
+  const [stagedAudio, setStagedAudio] = useState<{
+    url: string;
+    storagePath: string;
+    fileName: string;
+    sizeBytes: number;
+    caption: string;
+  } | null>(null);
+
+  // Pratonton gambar penuh sebelum diterbitkan
+  const [imagePreviewModal, setImagePreviewModal] = useState<{
+    src: string;
+    caption: string;
+  } | null>(null);
+
+  // Media yang sedang dipilih dalam editor
   const [selectedMedia, setSelectedMedia] = useState<SelectedMediaState | null>(null);
 
   const [canUndo, setCanUndo] = useState(false);
@@ -248,11 +275,14 @@ export function RichNoteEditor({
   const refreshActiveFormats = useCallback(() => {
     const sel = window.getSelection();
     if (!sel || !editorRef.current) return;
+    let isRtl = false;
     if (sel.rangeCount > 0) {
       const node = sel.getRangeAt(0).commonAncestorContainer;
       if (!editorRef.current.contains(node)) return;
       const elem = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
       setInsideTable(Boolean(elem?.closest('table')));
+      const dirBlock = elem?.closest('[dir]') as HTMLElement | null;
+      isRtl = dirBlock?.getAttribute('dir')?.toLowerCase() === 'rtl';
     }
     try {
       const blockVal = String(document.queryCommandValue('formatBlock') || 'p')
@@ -267,10 +297,11 @@ export function RichNoteEditor({
         left: document.queryCommandState('justifyLeft'),
         center: document.queryCommandState('justifyCenter'),
         right: document.queryCommandState('justifyRight'),
+        rtl: isRtl,
         block: ['h1', 'h2', 'h3', 'p'].includes(blockVal) ? blockVal : 'p',
       });
     } catch {
-      // Abaikan jika browser tidak menyokong queryCommandState tertentu
+      setActiveFormats((prev) => ({...prev, rtl: isRtl}));
     }
   }, []);
 
@@ -286,6 +317,69 @@ export function RichNoteEditor({
   const execCmd = (command: string, value?: string) => {
     restoreSelection();
     document.execCommand(command, false, value);
+    saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  // Pemformatan Tulisan Arab & Arah RTL / LTR
+  const handleSetDirection = (dir: 'rtl' | 'ltr') => {
+    const root = editorRef.current;
+    if (!root) return;
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const elem = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+    const blockEl = elem?.closest('p, div, h1, h2, h3, li, blockquote, td, th') as HTMLElement | null;
+
+    if (blockEl && blockEl !== root && root.contains(blockEl)) {
+      if (dir === 'rtl') {
+        blockEl.setAttribute('dir', 'rtl');
+        blockEl.style.direction = 'rtl';
+        blockEl.style.textAlign = 'right';
+        if (!blockEl.style.fontFamily) {
+          blockEl.style.fontFamily = 'Amiri, serif';
+        }
+      } else {
+        blockEl.setAttribute('dir', 'ltr');
+        blockEl.style.direction = 'ltr';
+        blockEl.style.textAlign = 'left';
+        if (blockEl.style.fontFamily.includes('Amiri')) {
+          blockEl.style.fontFamily = 'Plus Jakarta Sans, sans-serif';
+        }
+      }
+    } else if (!range.collapsed) {
+      const span = document.createElement('span');
+      span.setAttribute('dir', dir);
+      span.style.direction = dir;
+      if (dir === 'rtl') {
+        span.style.fontFamily = 'Amiri, serif';
+        span.style.fontSize = '22px';
+      }
+      try {
+        range.surroundContents(span);
+      } catch {
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+      }
+    } else {
+      const p = document.createElement('p');
+      p.setAttribute('dir', dir);
+      p.style.direction = dir;
+      p.style.textAlign = dir === 'rtl' ? 'right' : 'left';
+      if (dir === 'rtl') {
+        p.style.fontFamily = 'Amiri, serif';
+        p.style.fontSize = '22px';
+        p.textContent = 'اكتب النص العربي هنا';
+      } else {
+        p.innerHTML = '<br>';
+      }
+      root.appendChild(p);
+    }
+
     saveSelection();
     refreshActiveFormats();
     emitEditorChange(true);
@@ -403,7 +497,7 @@ export function RichNoteEditor({
   const applyTemplate = (nextId: NoteTemplateId, force = false) => {
     const el = editorRef.current;
     const currentText = (el?.textContent ?? '').trim();
-    const hasMedia = Boolean(el?.querySelector('img, video, table'));
+    const hasMedia = Boolean(el?.querySelector('img, video, audio, table'));
 
     if (!force && (currentText.length > 0 || hasMedia)) {
       setPendingTemplateId(nextId);
@@ -415,6 +509,7 @@ export function RichNoteEditor({
       el.innerHTML = tpl.starterHtml;
     }
     setPendingTemplateId(null);
+    setPreviewTemplate(null);
     setSelectedMedia(null);
     setShowTemplates(false);
     pushHistory(tpl.starterHtml);
@@ -500,7 +595,7 @@ export function RichNoteEditor({
     }
   };
 
-  // Klik elemen media (gambar atau video) dalam editor untuk kawalan langsung
+  // Klik elemen media (gambar, video atau audio) dalam editor untuk kawalan langsung
   const clearMediaSelectionOutline = () => {
     editorRef.current?.querySelectorAll('[data-iknow-selected]').forEach((node) => {
       node.removeAttribute('data-iknow-selected');
@@ -512,25 +607,36 @@ export function RichNoteEditor({
     const figure = target.closest('figure.iknow-figure') as HTMLElement | null;
     const directImg = target.tagName === 'IMG' ? (target as HTMLImageElement) : null;
     const directVid = target.tagName === 'VIDEO' ? (target as HTMLVideoElement) : null;
+    const directAud = target.tagName === 'AUDIO' ? (target as HTMLAudioElement) : null;
 
     if (figure) {
       clearMediaSelectionOutline();
       figure.setAttribute('data-iknow-selected', 'true');
-      const isVid =
-        figure.getAttribute('data-iknow-type') === 'video' || Boolean(figure.querySelector('video'));
-      const mediaEl = isVid
-        ? (figure.querySelector('video') as HTMLVideoElement | null)
-        : (figure.querySelector('img') as HTMLImageElement | null);
+      const rawType = figure.getAttribute('data-iknow-type');
+      const kind: 'image' | 'video' | 'audio' =
+        rawType === 'audio' || Boolean(figure.querySelector('audio'))
+          ? 'audio'
+          : rawType === 'video' || Boolean(figure.querySelector('video'))
+            ? 'video'
+            : 'image';
+
+      const mediaEl =
+        kind === 'audio'
+          ? (figure.querySelector('audio') as HTMLAudioElement | null)
+          : kind === 'video'
+            ? (figure.querySelector('video') as HTMLVideoElement | null)
+            : (figure.querySelector('img') as HTMLImageElement | null);
       const alignRaw = figure.getAttribute('data-align');
       const align =
         alignRaw === 'left' || alignRaw === 'right' || alignRaw === 'center' ? alignRaw : 'center';
+      const defaultW = kind === 'image' ? 75 : 100;
       const widthPercent = parsePercentWidth(
         figure.getAttribute('data-width') || mediaEl?.style.width,
-        isVid ? 100 : 75
+        defaultW
       );
       const caption = figure.querySelector('figcaption')?.textContent ?? '';
       setSelectedMedia({
-        kind: isVid ? 'video' : 'image',
+        kind,
         figure,
         src: mediaEl?.getAttribute('src') || '',
         widthPercent,
@@ -540,14 +646,24 @@ export function RichNoteEditor({
       return;
     }
 
-    if (directImg || directVid) {
-      // Bungkus jika elemen lama tiada figure
-      const mediaEl = directImg ?? directVid!;
+    if (directImg || directVid || directAud) {
+      const mediaEl = directImg ?? directVid ?? directAud!;
+      const kind: 'image' | 'video' | 'audio' = directAud
+        ? 'audio'
+        : directVid
+          ? 'video'
+          : 'image';
+      const defaultW = kind === 'image' ? 75 : 100;
       const fig = document.createElement('figure');
-      fig.className = 'iknow-figure';
-      fig.setAttribute('data-iknow-type', directVid ? 'video' : 'image');
+      fig.className =
+        kind === 'audio'
+          ? 'iknow-figure iknow-audio-figure'
+          : kind === 'video'
+            ? 'iknow-figure iknow-video-figure'
+            : 'iknow-figure';
+      fig.setAttribute('data-iknow-type', kind);
       fig.setAttribute('data-align', 'center');
-      fig.setAttribute('data-width', directVid ? '100%' : '75%');
+      fig.setAttribute('data-width', `${defaultW}%`);
       fig.setAttribute('data-iknow-selected', 'true');
       mediaEl.replaceWith(fig);
       fig.appendChild(mediaEl);
@@ -555,10 +671,10 @@ export function RichNoteEditor({
       cap.textContent = '';
       fig.appendChild(cap);
       setSelectedMedia({
-        kind: directVid ? 'video' : 'image',
+        kind,
         figure: fig,
         src: mediaEl.getAttribute('src') || '',
-        widthPercent: directVid ? 100 : 75,
+        widthPercent: defaultW,
         align: 'center',
         caption: '',
       });
@@ -678,6 +794,67 @@ export function RichNoteEditor({
     setPreviewVideoPlaying(false);
   };
 
+  // Muat naik Audio MP3 / WAV / OGG / M4A ke Firebase Storage
+  const handleSelectAudioFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    replaceExisting = false
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setMediaError(null);
+    setUploadingKind('audio');
+    setUploadProgress({percent: 0, bytesTransferred: 0, totalBytes: file.size});
+
+    try {
+      const res = await uploadNoteAudio(
+        file,
+        topicId || 'umum',
+        (info) => setUploadProgress(info),
+        (task) => {
+          activeUploadTaskRef.current = task;
+        }
+      );
+
+      if (replaceExisting && selectedMedia?.kind === 'audio') {
+        const aud = selectedMedia.figure.querySelector('audio');
+        if (aud) {
+          aud.setAttribute('src', res.url);
+        }
+        selectedMedia.figure.setAttribute('data-storage-path', res.storagePath);
+        setSelectedMedia({...selectedMedia, src: res.url});
+        emitEditorChange(true);
+      } else {
+        setStagedAudio({
+          url: res.url,
+          storagePath: res.storagePath,
+          fileName: file.name,
+          sizeBytes: res.sizeBytes,
+          caption: file.name.replace(/\.[^.]+$/, ''),
+        });
+        setAudioDrawerOpen(true);
+      }
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : 'Gagal memuat naik fail audio.');
+    } finally {
+      activeUploadTaskRef.current = null;
+      setUploadingKind(null);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleInsertStagedAudio = () => {
+    if (!stagedAudio) return;
+    const safeCap = stagedAudio.caption.trim().replace(/[<>]/g, '');
+    const figureHtml = `<figure class="iknow-figure iknow-audio-figure" data-iknow-type="audio" data-storage-path="${stagedAudio.storagePath}" data-align="center" data-width="100%"><audio controls preload="metadata" src="${stagedAudio.url}" style="width: 100%;"></audio>${
+      safeCap ? `<figcaption>${safeCap}</figcaption>` : ''
+    }</figure><p><br></p>`;
+    insertHtmlAtCursor(figureHtml);
+    setStagedAudio(null);
+    setAudioDrawerOpen(false);
+  };
+
   const updateSelectedMedia = (patch: {
     widthPercent?: number;
     align?: 'left' | 'center' | 'right';
@@ -693,7 +870,11 @@ export function RichNoteEditor({
     fig.setAttribute('data-align', nextAlign);
 
     const mediaEl =
-      selectedMedia.kind === 'video' ? fig.querySelector('video') : fig.querySelector('img');
+      selectedMedia.kind === 'audio'
+        ? fig.querySelector('audio')
+        : selectedMedia.kind === 'video'
+          ? fig.querySelector('video')
+          : fig.querySelector('img');
     if (mediaEl) {
       (mediaEl as HTMLElement).style.width = `${nextWidth}%`;
     }
@@ -759,81 +940,113 @@ export function RichNoteEditor({
         className="hidden"
         onChange={(e) => handleSelectVideoFile(e, true)}
       />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept=".mp3,.wav,.ogg,.aac,.m4a,audio/*"
+        className="hidden"
+        onChange={(e) => handleSelectAudioFile(e, false)}
+      />
+      <input
+        ref={replaceAudioInputRef}
+        type="file"
+        accept=".mp3,.wav,.ogg,.aac,.m4a,audio/*"
+        className="hidden"
+        onChange={(e) => handleSelectAudioFile(e, true)}
+      />
 
       {/* Bar Template Aktif */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
         <div className="flex items-center gap-2 text-xs">
-          <LayoutTemplate className="h-4 w-4 text-emerald-700 shrink-0" />
+          <LayoutTemplate className="h-4 w-4 text-[#064e3b] shrink-0" />
           <span className="font-medium text-slate-600">Template Aktif:</span>
-          <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800 border border-emerald-200">
+          <span className="font-bold text-[#064e3b]">
             {activeTemplate.name}
           </span>
         </div>
         <button
           type="button"
           onClick={() => setShowTemplates((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
         >
-          <LayoutTemplate className="h-3.5 w-3.5 text-emerald-700" />
-          {showTemplates ? 'Tutup Pilihan Template' : 'Pilih / Tukar Template'}
+          <LayoutTemplate className="h-3.5 w-3.5 text-[#064e3b]" />
+          {showTemplates ? 'Tutup Pilihan Template' : 'Pilih / Pratonton Template'}
         </button>
       </div>
 
-      {/* Pilihan 6 Template Nota */}
+      {/* Pilihan 6 Template Nota dengan Pratonton Sebelum Memilih */}
       {showTemplates && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+        <div className="rounded-2xl border border-[#cce7db] bg-[#f3faf6] p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h4 className="text-sm font-bold text-slate-900">
                 Pilih Template Susun Atur Nota
               </h4>
               <p className="text-xs text-slate-600">
-                Pilih salah satu susun atur di bawah sebelum menulis. Semua teks, jadual dan media boleh diubah suai selepas dipilih.
+                Klik <strong>Pratonton</strong> untuk melihat susun atur sebelum memilih, atau klik terus pada kad untuk mula menulis. Semua teks dan media boleh disunting sepenuhnya selepas dipilih.
               </p>
             </div>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {NOTE_TEMPLATES.map((tpl) => {
               const selected = tpl.id === templateId;
               return (
-                <button
+                <div
                   key={tpl.id}
-                  type="button"
-                  onClick={() => applyTemplate(tpl.id)}
-                  className={`flex flex-col justify-between rounded-xl border p-3 text-left transition-colors ${
+                  className={`flex flex-col justify-between rounded-xl border p-3.5 transition-colors ${
                     selected
-                      ? 'border-emerald-700 bg-white ring-1 ring-emerald-700'
-                      : 'border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/20'
+                      ? 'border-[#064e3b] bg-white ring-1 ring-[#064e3b]'
+                      : 'border-slate-200 bg-white hover:border-emerald-400'
                   }`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-slate-900">{tpl.name}</span>
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                      <span className="text-[11px] font-semibold text-[#064e3b]">
                         {tpl.badge}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
                       {tpl.subtitle}
                     </p>
                   </div>
-                  <div className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                    {selected ? (
-                      <>
-                        <Check className="h-3 w-3" /> Sedang digunakan
-                      </>
-                    ) : (
-                      'Gunakan Template'
-                    )}
+
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTemplate(tpl)}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Eye className="h-3 w-3 text-[#064e3b]" />
+                      Pratonton
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate(tpl.id)}
+                      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                        selected
+                          ? 'bg-[#f3faf6] text-[#064e3b] border border-[#cce7db]'
+                          : 'bg-[#064e3b] text-white hover:bg-[#047857]'
+                      }`}
+                    >
+                      {selected ? (
+                        <>
+                          <Check className="h-3 w-3" /> Digunakan
+                        </>
+                      ) : (
+                        'Gunakan'
+                      )}
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
 
           {pendingTemplateId && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e6dcc6] bg-[#fbf7ee] p-3 text-xs text-slate-800">
               <span>
                 Editor sudah mempunyai kandungan. Menggantikan dengan template{' '}
                 <strong>{getTemplateById(pendingTemplateId).name}</strong> akan menggantikan susun atur semasa.
@@ -842,14 +1055,14 @@ export function RichNoteEditor({
                 <button
                   type="button"
                   onClick={() => setPendingTemplateId(null)}
-                  className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-slate-700"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700"
                 >
                   Kekalkan Kandungan
                 </button>
                 <button
                   type="button"
                   onClick={() => applyTemplate(pendingTemplateId, true)}
-                  className="rounded-md bg-emerald-700 px-2.5 py-1 font-semibold text-white hover:bg-emerald-800"
+                  className="rounded-lg bg-[#064e3b] px-3 py-1.5 font-semibold text-white hover:bg-[#047857]"
                 >
                   Terapkan Template
                 </button>
@@ -860,9 +1073,9 @@ export function RichNoteEditor({
       )}
 
       {/* Toolbar Editor Dokumen */}
-      <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
-        <div className="border-b border-slate-200 bg-slate-50 p-2 space-y-2">
-          {/* Baris 1: Undo/Redo, Heading, Font Family, Font Size, Format Tulisan */}
+      <div className="rounded-2xl border border-slate-300 bg-white overflow-hidden">
+        <div className="border-b border-slate-200 bg-slate-50 p-2.5 space-y-2">
+          {/* Baris 1: Undo/Redo, Heading, Font Family, Font Size, Format Tulisan, Warna */}
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Undo & Redo */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
@@ -894,7 +1107,7 @@ export function RichNoteEditor({
               value={activeFormats.block}
               onMouseDown={saveSelection}
               onChange={(e) => execCmd('formatBlock', `<${e.target.value}>`)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700"
             >
               <option value="p">Perenggan Biasa</option>
               <option value="h1">Tajuk H1</option>
@@ -911,7 +1124,7 @@ export function RichNoteEditor({
                 if (e.target.value) handleApplyFontFamily(e.target.value);
                 e.target.value = '';
               }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 max-w-[160px]"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 max-w-[160px]"
             >
               <option value="" disabled>
                 Jenis Tulisan
@@ -932,7 +1145,7 @@ export function RichNoteEditor({
                 if (e.target.value) handleApplyFontSize(e.target.value);
                 e.target.value = '';
               }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
             >
               <option value="" disabled>
                 Saiz
@@ -1001,9 +1214,9 @@ export function RichNoteEditor({
                   setTablePopoverOpen(false);
                 }}
                 title="Warna Tulisan"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
               >
-                <Palette className="h-3.5 w-3.5 text-emerald-700" />
+                <Palette className="h-3.5 w-3.5 text-[#064e3b]" />
                 Warna
               </button>
               {textColorOpen && (
@@ -1052,9 +1265,9 @@ export function RichNoteEditor({
                   setTablePopoverOpen(false);
                 }}
                 title="Warna Latar Tulisan"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
               >
-                <Highlighter className="h-3.5 w-3.5 text-amber-600" />
+                <Highlighter className="h-3.5 w-3.5 text-amber-700" />
                 Latar
               </button>
               {highlightOpen && (
@@ -1092,7 +1305,7 @@ export function RichNoteEditor({
             </div>
           </div>
 
-          {/* Baris 2: Senarai, Penjajaran, Jadual, INSERT IMAGE, INSERT VIDEO */}
+          {/* Baris 2: Senarai, Penjajaran, Arab RTL/LTR, Jadual, INSERT IMAGE, INSERT VIDEO, INSERT AUDIO */}
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Senarai */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
@@ -1167,6 +1380,33 @@ export function RichNoteEditor({
               </button>
             </div>
 
+            {/* Pemformatan Arab & Arah RTL / LTR */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSetDirection('rtl')}
+                title="Format Teks Arab (Arah Kanan ke Kiri / RTL)"
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold ${
+                  activeFormats.rtl
+                    ? 'bg-[#064e3b] text-white'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Languages className="h-3.5 w-3.5" />
+                Arab RTL
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSetDirection('ltr')}
+                title="Arah Kiri ke Kanan (LTR)"
+                className="rounded px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+              >
+                LTR
+              </button>
+            </div>
+
             {/* Sisipan Jadual */}
             <div className="relative">
               <button
@@ -1181,9 +1421,9 @@ export function RichNoteEditor({
                   setHighlightOpen(false);
                 }}
                 title="Sisip Jadual"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
               >
-                <Table2 className="h-3.5 w-3.5 text-emerald-700" />
+                <Table2 className="h-3.5 w-3.5 text-[#064e3b]" />
                 Jadual
               </button>
               {tablePopoverOpen && (
@@ -1233,7 +1473,7 @@ export function RichNoteEditor({
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={handleInsertTable}
-                      className="rounded-md bg-emerald-700 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-800"
+                      className="rounded-md bg-[#064e3b] px-3 py-1 text-xs font-semibold text-white hover:bg-[#047857]"
                     >
                       Sisip
                     </button>
@@ -1293,7 +1533,7 @@ export function RichNoteEditor({
                 setMediaError(null);
                 imageInputRef.current?.click();
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
             >
               <ImagePlus className="h-3.5 w-3.5" />
               INSERT IMAGE
@@ -1309,12 +1549,32 @@ export function RichNoteEditor({
               }}
               onClick={() => {
                 setMediaError(null);
+                setAudioDrawerOpen(false);
                 setVideoDrawerOpen((v) => !v);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
             >
               <Film className="h-3.5 w-3.5" />
               INSERT VIDEO
+            </button>
+
+            {/* INSERT AUDIO */}
+            <button
+              type="button"
+              disabled={uploadingKind !== null}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                saveSelection();
+              }}
+              onClick={() => {
+                setMediaError(null);
+                setVideoDrawerOpen(false);
+                setAudioDrawerOpen((v) => !v);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#064e3b] bg-white px-3 py-1.5 text-xs font-semibold text-[#064e3b] hover:bg-[#f3faf6] disabled:opacity-50"
+            >
+              <Headphones className="h-3.5 w-3.5" />
+              INSERT AUDIO
             </button>
           </div>
         </div>
@@ -1325,7 +1585,13 @@ export function RichNoteEditor({
             <div className="flex items-center justify-between text-xs">
               <span className="inline-flex items-center gap-2 font-semibold text-emerald-900">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Memuat naik {uploadingKind === 'image' ? 'gambar' : 'video'} ke Firebase Storage...
+                Memuat naik{' '}
+                {uploadingKind === 'image'
+                  ? 'gambar'
+                  : uploadingKind === 'video'
+                    ? 'video'
+                    : 'audio'}{' '}
+                ke Firebase Storage...
               </span>
               <div className="flex items-center gap-3">
                 <span className="font-mono-tabular text-emerald-800">
@@ -1343,7 +1609,7 @@ export function RichNoteEditor({
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-200">
               <div
-                className="h-full bg-emerald-700 transition-all duration-150"
+                className="h-full bg-[#064e3b] transition-all duration-150"
                 style={{width: `${uploadProgress.percent}%`}}
               />
             </div>
@@ -1384,9 +1650,9 @@ export function RichNoteEditor({
             </div>
 
             {!stagedVideo ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-amber-300 bg-white p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-amber-300 bg-white p-3.5">
                 <p className="text-xs text-slate-600">
-                  Pilih fail video <strong>.mp4</strong> atau <strong>.webm</strong> daripada komputer/peranti anda untuk dimuat naik ke Firebase Storage dan dipratonton.
+                  Pilih fail video <strong>.mp4</strong> atau <strong>.webm</strong> daripada komputer/telefon anda untuk dimuat naik ke Firebase Storage dan dipratonton.
                 </p>
                 <button
                   type="button"
@@ -1435,7 +1701,7 @@ export function RichNoteEditor({
                         if (v.paused) void v.play();
                         else v.pause();
                       }}
-                      className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1 font-semibold text-white hover:bg-emerald-600"
+                      className="inline-flex items-center gap-1 rounded bg-[#064e3b] px-2.5 py-1 font-semibold text-white hover:bg-[#047857]"
                     >
                       {previewVideoPlaying ? (
                         <Pause className="h-3 w-3" />
@@ -1464,13 +1730,13 @@ export function RichNoteEditor({
                     onChange={(e) =>
                       setStagedVideo({...stagedVideo, caption: e.target.value})
                     }
-                    placeholder="Kapsyen video (pilihan)"
+                    placeholder="Kapsyen atau penerangan video (pilihan)"
                     className="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
                   />
                   <button
                     type="button"
                     onClick={handleInsertStagedVideo}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#047857]"
                   >
                     <Check className="h-3.5 w-3.5" />
                     Masukkan ke Dalam Nota
@@ -1481,20 +1747,118 @@ export function RichNoteEditor({
           </div>
         )}
 
-        {/* Inspector Kawalan Media Terpilih (Gambar atau Video) */}
+        {/* Drawer Muat Naik & Pratonton Audio Sebelum Dimasukkan */}
+        {audioDrawerOpen && (
+          <div className="border-b border-[#e6dcc6] bg-[#fbf7ee] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Headphones className="h-4 w-4 text-[#064e3b]" />
+                <h4 className="text-xs font-bold text-slate-900">
+                  Muat Naik Audio Pembelajaran (MP3, WAV, OGG, M4A · Maksimum 30 MB)
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAudioDrawerOpen(false)}
+                className="rounded p-1 text-slate-500 hover:bg-amber-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {!stagedAudio ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[#d4c39f] bg-white p-3.5">
+                <p className="text-xs text-slate-600">
+                  Pilih rakaman bacaan ayat, lafaz niat atau penerangan audio daripada peranti anda untuk dimuat naik ke Firebase Storage.
+                </p>
+                <button
+                  type="button"
+                  disabled={uploadingKind !== null}
+                  onClick={() => audioInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Pilih Fail Audio
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-xl border border-[#e6dcc6] bg-white p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-slate-900">
+                    Pratonton Audio: {stagedAudio.fileName} ({formatBytes(stagedAudio.sizeBytes)})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => audioInputRef.current?.click()}
+                    className="text-xs font-medium text-[#064e3b] hover:underline"
+                  >
+                    Tukar Fail Lain
+                  </button>
+                </div>
+
+                <audio src={stagedAudio.url} controls className="w-full" />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={stagedAudio.caption}
+                    onChange={(e) =>
+                      setStagedAudio({...stagedAudio, caption: e.target.value})
+                    }
+                    placeholder="Tajuk / kapsyen penerangan audio"
+                    className="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleInsertStagedAudio}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#047857]"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Masukkan ke Dalam Nota
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Inspector Kawalan Media Terpilih (Gambar, Video atau Audio) */}
         {selectedMedia && (
-          <div className="border-b border-emerald-200 bg-emerald-50/70 px-4 py-3 space-y-2.5">
+          <div className="border-b border-[#cce7db] bg-[#f3faf6] px-4 py-3 space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-bold text-emerald-950">
-                Kawalan {selectedMedia.kind === 'image' ? 'Gambar' : 'Video'} Terpilih
+              <span className="text-xs font-bold text-[#064e3b]">
+                Kawalan{' '}
+                {selectedMedia.kind === 'image'
+                  ? 'Gambar'
+                  : selectedMedia.kind === 'video'
+                    ? 'Video'
+                    : 'Audio'}{' '}
+                Terpilih
               </span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {selectedMedia.kind === 'image' && selectedMedia.src && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImagePreviewModal({
+                        src: selectedMedia.src,
+                        caption: selectedMedia.caption,
+                      })
+                    }
+                    className="inline-flex items-center gap-1 rounded-md border border-[#cce7db] bg-white px-2.5 py-1 text-xs font-medium text-[#064e3b] hover:bg-emerald-50"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                    Pratonton Penuh
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() =>
                     selectedMedia.kind === 'image'
                       ? replaceImageInputRef.current?.click()
-                      : replaceVideoInputRef.current?.click()
+                      : selectedMedia.kind === 'video'
+                        ? replaceVideoInputRef.current?.click()
+                        : replaceAudioInputRef.current?.click()
                   }
                   className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
@@ -1533,7 +1897,7 @@ export function RichNoteEditor({
                     onClick={() => updateSelectedMedia({widthPercent: pct})}
                     className={`rounded px-2 py-0.5 text-[11px] font-semibold border ${
                       selectedMedia.widthPercent === pct
-                        ? 'border-emerald-700 bg-emerald-700 text-white'
+                        ? 'border-[#064e3b] bg-[#064e3b] text-white'
                         : 'border-slate-300 bg-white text-slate-700'
                     }`}
                   >
@@ -1548,7 +1912,7 @@ export function RichNoteEditor({
                   onChange={(e) =>
                     updateSelectedMedia({widthPercent: Number(e.target.value)})
                   }
-                  className="w-20 accent-emerald-700"
+                  className="w-20 accent-[#064e3b]"
                 />
               </div>
 
@@ -1562,7 +1926,7 @@ export function RichNoteEditor({
                     onClick={() => updateSelectedMedia({align: pos})}
                     className={`rounded p-1 border ${
                       selectedMedia.align === pos
-                        ? 'border-emerald-700 bg-emerald-700 text-white'
+                        ? 'border-[#064e3b] bg-[#064e3b] text-white'
                         : 'border-slate-300 bg-white text-slate-700'
                     }`}
                     title={pos === 'left' ? 'Kiri' : pos === 'center' ? 'Tengah' : 'Kanan'}
@@ -1578,13 +1942,17 @@ export function RichNoteEditor({
                 ))}
               </div>
 
-              {/* Kapsyen */}
+              {/* Kapsyen / Penerangan */}
               <div className="sm:col-span-4">
                 <input
                   type="text"
                   value={selectedMedia.caption}
                   onChange={(e) => updateSelectedMedia({caption: e.target.value})}
-                  placeholder="Tambah atau edit kapsyen..."
+                  placeholder={
+                    selectedMedia.kind === 'audio'
+                      ? 'Tambah tajuk atau penerangan audio...'
+                      : 'Tambah atau edit kapsyen...'
+                  }
                   className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs"
                 />
               </div>
@@ -1620,7 +1988,7 @@ export function RichNoteEditor({
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600">
           <span className="inline-flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5 text-slate-400" />
-            Klik mana-mana gambar atau video dalam editor untuk melaraskan saiz, kedudukan atau kapsyen.
+            Klik mana-mana gambar, video atau audio dalam editor untuk melaraskan saiz, kedudukan atau kapsyen.
           </span>
           <span
             className={`font-mono-tabular font-semibold ${
@@ -1635,6 +2003,86 @@ export function RichNoteEditor({
           </span>
         </div>
       </div>
+
+      {/* Modal Pratonton Template Sebelum Memilih */}
+      {previewTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#064e3b]">
+                  Pratonton Susun Atur Template
+                </p>
+                <h4 className="text-base font-bold text-slate-900">
+                  {previewTemplate.name}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                <NoteContentRenderer
+                  body={serializeNoteContent(previewTemplate.starterHtml, previewTemplate.id)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-3.5">
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => applyTemplate(previewTemplate.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-4 py-2 text-xs font-semibold text-white hover:bg-[#047857]"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Pilih &amp; Gunakan Template Ini
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pratonton Gambar Penuh Sebelum Diterbitkan */}
+      {imagePreviewModal && (
+        <div
+          onClick={() => setImagePreviewModal(null)}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 p-4 sm:p-8"
+        >
+          <button
+            type="button"
+            onClick={() => setImagePreviewModal(null)}
+            className="absolute right-4 top-4 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[85vh] max-w-4xl flex-col items-center gap-3"
+          >
+            <img
+              src={imagePreviewModal.src}
+              alt={imagePreviewModal.caption || 'Pratonton gambar'}
+              className="max-h-[75vh] max-w-full rounded-xl object-contain"
+            />
+            {imagePreviewModal.caption && (
+              <p className="text-sm text-slate-200 text-center">{imagePreviewModal.caption}</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

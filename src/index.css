@@ -12,6 +12,7 @@
     background-color: #f8fafc;
     color: #0f172a;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow-x: hidden;
   }
 
   h1, h2, h3 {
@@ -22,7 +23,7 @@
 .font-arabic {
   font-family: var(--font-arabic);
   direction: rtl;
-  line-height: 2.1;
+  line-height: 2.15;
 }
 
 .font-mono-tabular {
@@ -42,12 +43,18 @@
   }
 }
 
-/* Rich Content Editor & Student Note Renderer Styles */
+/* Rich Content Editor & Student Note Renderer Styles — Modern Minimalist Islamic Digital Learning */
 .iknow-rich-content {
   color: #1e293b;
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  font-size: 1rem;
+  line-height: 1.75;
   word-break: break-word;
+}
+
+@media (min-width: 640px) {
+  .iknow-rich-content {
+    font-size: 1.03125rem;
+  }
 }
 
 .iknow-rich-content > *:first-child {
@@ -55,101 +62,119 @@
 }
 
 .iknow-rich-content h1 {
-  font-size: 1.625rem;
+  font-size: 1.5625rem;
   font-weight: 700;
   color: #0f172a;
   line-height: 1.3;
-  margin: 1.1rem 0 0.55rem;
+  letter-spacing: -0.015em;
+  margin: 1.25rem 0 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .iknow-rich-content h1 {
+    font-size: 1.75rem;
+  }
 }
 
 .iknow-rich-content h2 {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #064e3b;
   line-height: 1.35;
-  margin: 1rem 0 0.5rem;
+  letter-spacing: -0.01em;
+  margin: 1.2rem 0 0.55rem;
 }
 
 .iknow-rich-content h3 {
-  font-size: 1.075rem;
+  font-size: 1.0875rem;
   font-weight: 600;
   color: #0f172a;
   line-height: 1.4;
-  margin: 0.85rem 0 0.4rem;
+  margin: 1rem 0 0.45rem;
 }
 
 .iknow-rich-content p {
-  margin: 0.55rem 0;
+  margin: 0.65rem 0;
+}
+
+.iknow-rich-content [dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+  font-family: var(--font-arabic);
+  font-size: 1.4em;
+  line-height: 2.15;
+  color: #0f172a;
 }
 
 .iknow-rich-content ul {
   list-style-type: disc;
-  padding-left: 1.4rem;
-  margin: 0.6rem 0;
+  padding-left: 1.45rem;
+  margin: 0.7rem 0;
 }
 
 .iknow-rich-content ol {
   list-style-type: decimal;
-  padding-left: 1.45rem;
-  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+  margin: 0.7rem 0;
 }
 
 .iknow-rich-content li {
-  margin: 0.3rem 0;
+  margin: 0.35rem 0;
 }
 
 .iknow-rich-content blockquote {
-  margin: 0.85rem 0;
-  padding: 0.75rem 1rem;
-  border-left: 4px solid #047857;
-  background-color: #ecfdf5;
-  border-radius: 0 0.5rem 0.5rem 0;
+  margin: 1rem 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid #cce7db;
+  background-color: #f3faf6;
+  border-radius: 0.75rem;
   color: #064e3b;
 }
 
 .iknow-rich-content .iknow-callout {
-  margin: 0.85rem 0;
-  padding: 0.75rem 1rem;
-  border: 1px solid #fde68a;
-  background-color: #fffbeb;
-  border-radius: 0.625rem;
-  color: #78350f;
+  margin: 1rem 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid #e6dcc6;
+  background-color: #fbf7ee;
+  border-radius: 0.75rem;
+  color: #5c4314;
 }
 
 .iknow-rich-content table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.9rem 0;
-  font-size: 0.875rem;
-  border: 1px solid #cbd5e1;
+  margin: 1.1rem 0;
+  font-size: 0.9rem;
+  border: 1px solid #e2e8f0;
   background-color: #ffffff;
+  border-radius: 0.5rem;
 }
 
 .iknow-rich-content th,
 .iknow-rich-content td {
-  border: 1px solid #cbd5e1;
-  padding: 0.55rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.65rem 0.85rem;
   text-align: left;
   vertical-align: top;
 }
 
 .iknow-rich-content thead th {
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
   font-weight: 600;
-  color: #0f172a;
+  color: #064e3b;
 }
 
 .iknow-rich-content details {
-  margin: 0.7rem 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.625rem;
-  padding: 0.65rem 0.9rem;
+  margin: 0.75rem 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
   background-color: #f8fafc;
 }
 
 .iknow-rich-content details[open] {
-  border-color: #a7f3d0;
-  background-color: #ecfdf5;
+  border-color: #bbf7d0;
+  background-color: #f3faf6;
 }
 
 .iknow-rich-content summary {
@@ -159,10 +184,11 @@
 }
 
 .iknow-rich-content figure.iknow-figure {
-  margin: 1rem 0;
+  margin: 1.2rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  max-width: 100%;
 }
 
 .iknow-rich-content figure.iknow-figure[data-align="left"] {
@@ -181,34 +207,66 @@
   display: block;
   max-width: 100%;
   height: auto;
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
+}
+
+.iknow-rich-content:not([contenteditable="true"]) figure.iknow-figure img {
+  cursor: zoom-in;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.iknow-rich-content:not([contenteditable="true"]) figure.iknow-figure img:hover {
+  box-shadow: 0 6px 20px -6px rgba(6, 78, 59, 0.18);
 }
 
 .iknow-rich-content figure.iknow-figure video {
   display: block;
   max-width: 100%;
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   background-color: #020617;
 }
 
+.iknow-rich-content figure.iknow-figure audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
 .iknow-rich-content figure.iknow-figure figcaption {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
   color: #64748b;
-  font-style: italic;
   text-align: center;
 }
 
 .iknow-rich-content [data-iknow-selected="true"] img,
-.iknow-rich-content [data-iknow-selected="true"] video {
+.iknow-rich-content [data-iknow-selected="true"] video,
+.iknow-rich-content [data-iknow-selected="true"] audio {
   outline: 3px solid #047857;
   outline-offset: 2px;
+  border-radius: 0.75rem;
 }
 
-/* Template subtle visual themes */
+/* Template Subtle Visual Themes (6 Template Utama) */
+.iknow-tpl-dalil blockquote,
+.iknow-tpl-dalil .iknow-callout {
+  background-color: #fbf7ee;
+  border-color: #e6dcc6;
+  color: #4a3510;
+}
+
+.iknow-tpl-visual thead th,
 .iknow-tpl-infographic thead th {
-  background-color: #065f46;
+  background-color: #064e3b;
   color: #ffffff;
+}
+
+.iknow-tpl-multimedia figure.iknow-audio-figure {
+  background-color: #fbf7ee;
+  border: 1px solid #e6dcc6;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
 }
 
 .iknow-tpl-step-by-step ol {
@@ -220,22 +278,22 @@
 .iknow-tpl-step-by-step ol > li {
   counter-increment: iknow-step;
   position: relative;
-  padding: 0.65rem 0.85rem 0.65rem 2.75rem;
-  margin: 0.5rem 0;
+  padding: 0.8rem 1rem 0.8rem 3rem;
+  margin: 0.65rem 0;
   border: 1px solid #e2e8f0;
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   background-color: #f8fafc;
 }
 
 .iknow-tpl-step-by-step ol > li::before {
   content: counter(iknow-step);
   position: absolute;
-  left: 0.75rem;
-  top: 0.65rem;
-  width: 1.5rem;
-  height: 1.5rem;
+  left: 0.85rem;
+  top: 0.8rem;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: 9999px;
-  background-color: #047857;
+  background-color: #064e3b;
   color: #ffffff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -245,8 +303,13 @@
 }
 
 .iknow-tpl-summary {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  padding: 1rem;
+  background-color: #fbf7ee;
+  border: 1px solid #e6dcc6;
+  border-radius: 0.875rem;
+  padding: 1.15rem;
+}
+
+.iknow-tpl-summary thead th {
+  background-color: #064e3b;
+  color: #ffffff;
 }

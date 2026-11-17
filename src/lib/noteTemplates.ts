@@ -1,10 +1,12 @@
 export type NoteTemplateId =
   | 'standard'
-  | 'illustrated'
+  | 'dalil'
+  | 'visual'
+  | 'multimedia'
   | 'step-by-step'
-  | 'infographic'
-  | 'summary'
-  | 'interactive';
+  | 'summary';
+
+export type DalilKind = 'general' | 'quran' | 'hadith';
 
 export interface NoteTemplateDefinition {
   id: NoteTemplateId;
@@ -17,131 +19,122 @@ export interface NoteTemplateDefinition {
 export const NOTE_TEMPLATES: NoteTemplateDefinition[] = [
   {
     id: 'standard',
-    name: 'Nota Pembelajaran Biasa',
-    subtitle: 'Struktur tajuk, pengenalan, poin utama dan rumusan.',
+    name: 'Nota Standard',
+    subtitle: 'Penerangan, definisi dan konsep asas secara teratur dan mudah difahami.',
     badge: 'Standard',
-    starterHtml: `<h2>Pengenalan Topik</h2>
-<p>Tulis pengenalan ringkas tentang konsep asas topik ini untuk membantu pelajar memahami gambaran keseluruhan.</p>
-<h3>Isi Penting</h3>
+    starterHtml: `<h2>Definisi &amp; Konsep Asas</h2>
+<p>Tulis penerangan utama atau definisi topik dengan ayat yang ringkas, jelas dan mesra pelajar.</p>
+<h3>Huraian Konsep Utama</h3>
 <ul>
-  <li>Poin utama pertama beserta huraian ringkas.</li>
-  <li>Poin utama kedua dengan contoh amalan harian.</li>
-  <li>Poin utama ketiga untuk pengukuhan kefahaman.</li>
+  <li><strong>Poin Pertama:</strong> Penerangan ringkas beserta konteks amalan seharian.</li>
+  <li><strong>Poin Kedua:</strong> Penekanan hukum atau adab yang perlu diberi perhatian.</li>
+  <li><strong>Poin Ketiga:</strong> Contoh praktikal bagi mengukuhkan kefahaman pelajar.</li>
 </ul>
-<blockquote><strong>Rumusan:</strong> Nyatakan kesimpulan atau nilai penghayatan utama daripada topik ini.</blockquote>`,
+<blockquote><strong>Rumusan Pembelajaran:</strong> Nyatakan kesimpulan utama yang perlu diingati oleh pelajar selepas membaca nota ini.</blockquote>`,
   },
   {
-    id: 'illustrated',
-    name: 'Nota Bergambar',
-    subtitle: 'Susun atur visual dengan ruang gambar ilustrasi & kapsyen.',
+    id: 'dalil',
+    name: 'Nota Dalil',
+    subtitle: 'Susun atur ayat al-Quran, hadis, terjemahan serta huraian pengajaran.',
+    badge: 'Dalil',
+    starterHtml: `<h2>Dalil Naqli &amp; Huraian</h2>
+<p>Kemukakan dalil daripada al-Quran atau Hadis Nabi SAW yang berkaitan dengan topik ini. Anda juga boleh mengisi kotak <strong>Medan Dalil &amp; Lafaz Arab</strong> di bawah editor untuk paparan kad khas krim lembut.</p>
+<p dir="rtl" style="font-family: Amiri, serif; font-size: 22px; text-align: right;">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
+<div class="iknow-callout"><strong>Terjemahan:</strong> Masukkan terjemahan ayat al-Quran atau matan hadis secara tepat beserta sumber rujukan (Surah &amp; ayat atau perawi hadis).</div>
+<h3>Huraian &amp; Pengajaran Dalil</h3>
+<ul>
+  <li><strong>Intipati Hukum / Pengajaran:</strong> Terangkan maksud dalil dan kaitannya dengan amalan ibadah.</li>
+  <li><strong>Aplikasi Amali:</strong> Nyatakan cara pelajar mengamalkannya dalam kehidupan harian.</li>
+</ul>`,
+  },
+  {
+    id: 'visual',
+    name: 'Nota Visual',
+    subtitle: 'Susun atur bergambar, rajah, jadual infografik dan penerangan ringkas.',
     badge: 'Visual',
-    starterHtml: `<h2>Panduan Visual &amp; Ilustrasi</h2>
-<p>Gunakan butang <strong>INSERT IMAGE</strong> pada toolbar di atas untuk memuat naik gambar rajah, poster atau foto panduan terus ke bahagian ini.</p>
-<div class="iknow-callout"><strong>Tip Penyunting:</strong> Klik pada gambar selepas dimuat naik untuk melaraskan saiz (25%–100%), penjajaran (kiri/tengah/kanan) dan kapsyen gambar.</div>
-<h3>Huraian Gambar Rajah</h3>
-<p>Terangkan langkah, kedudukan anggota, atau tanda bacaan yang ditunjukkan dalam gambar di atas.</p>`,
-  },
-  {
-    id: 'step-by-step',
-    name: 'Nota Langkah Demi Langkah',
-    subtitle: 'Panduan berurutan mengikut tertib daripada langkah 1 hingga akhir.',
-    badge: 'Tertib',
-    starterHtml: `<h2>Tatacara Pelaksanaan Mengikut Tertib</h2>
-<p>Ikuti langkah-langkah berikut secara teratur:</p>
-<ol>
-  <li><strong>Langkah 1 — Persediaan:</strong> Pastikan niat, kebersihan dan syarat dipenuhi sebelum bermula.</li>
-  <li><strong>Langkah 2 — Pelaksanaan Utama:</strong> Lakukan pergerakan atau bacaan dengan tenang dan tertib.</li>
-  <li><strong>Langkah 3 — Semakan &amp; Penutup:</strong> Semak kesempurnaan rukun serta adab penutup.</li>
-</ol>
-<div class="iknow-callout"><strong>Peringatan Penting:</strong> Elakkan tergesa-gesa bagi menjaga kesempurnaan ibadah dan bacaan.</div>`,
-  },
-  {
-    id: 'infographic',
-    name: 'Nota Berbentuk Infografik',
-    subtitle: 'Susun atur jadual perbandingan, fakta utama dan kad ringkas.',
-    badge: 'Infografik',
-    starterHtml: `<h2>Infografik Ringkas &amp; Perbandingan</h2>
-<p>Ringkasan visual bagi memudahkan pelajar membandingkan hukum, kategori atau pembahagian utama:</p>
+    starterHtml: `<h2>Rajah Visual &amp; Infografik</h2>
+<p>Gunakan butang <strong>INSERT IMAGE</strong> di atas untuk memuat naik gambar rajah, poster atau ilustrasi panduan terus daripada peranti anda.</p>
+<div class="iknow-callout"><strong>Tip Penyunting:</strong> Klik pada gambar selepas dimuat naik untuk melaraskan saiz (25%–100%), kedudukan (kiri/tengah/kanan) dan kapsyen gambar.</div>
+<h3>Jadual Perbandingan Pantas</h3>
 <table>
   <thead>
     <tr>
-      <th>Kategori / Hukum</th>
+      <th>Perkara / Bahagian</th>
       <th>Ciri Utama</th>
-      <th>Contoh / Amalan</th>
+      <th>Contoh / Kadar</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><strong>Bahagian A</strong></td>
-      <td>Nyatakan syarat atau huruf berkaitan</td>
-      <td>Masukkan contoh ringkas</td>
+      <td>Nyatakan ciri atau syarat penting</td>
+      <td>Contoh ringkas</td>
     </tr>
     <tr>
       <td><strong>Bahagian B</strong></td>
-      <td>Nyatakan perbezaan utama</td>
-      <td>Masukkan contoh ringkas</td>
-    </tr>
-    <tr>
-      <td><strong>Bahagian C</strong></td>
-      <td>Nyatakan kadar atau hukum</td>
-      <td>Masukkan contoh ringkas</td>
-    </tr>
-  </tbody>
-</table>
-<blockquote><strong>Fakta Pantas:</strong> Gunakan jadual di atas untuk meringkaskan fakta yang sering disoal dalam penilaian.</blockquote>`,
-  },
-  {
-    id: 'summary',
-    name: 'Nota Ringkasan',
-    subtitle: 'Ulang kaji pantas berisi kata kunci dan intipati padat.',
-    badge: 'Ulang Kaji',
-    starterHtml: `<h2>Ringkasan Pantas Topik</h2>
-<ul>
-  <li><strong>Definisi Ringkas:</strong> Nyatakan maksud utama dalam satu atau dua ayat.</li>
-  <li><strong>Syarat &amp; Rukun:</strong> Senaraikan perkara asas yang wajib dipatuhi.</li>
-  <li><strong>Kesilapan Lazim:</strong> Nyatakan perkara yang perlu dielakkan oleh pelajar.</li>
-</ul>
-<h3>Jadual Kata Kunci</h3>
-<table>
-  <thead>
-    <tr>
-      <th>Istilah</th>
-      <th>Maksud Ringkas</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Istilah 1</td>
-      <td>Penerangan padat untuk ingatan pantas</td>
-    </tr>
-    <tr>
-      <td>Istilah 2</td>
-      <td>Penerangan padat untuk ingatan pantas</td>
+      <td>Nyatakan perbezaan atau hukum</td>
+      <td>Contoh ringkas</td>
     </tr>
   </tbody>
 </table>`,
   },
   {
-    id: 'interactive',
-    name: 'Nota Interaktif',
-    subtitle: 'Dilengkapi soalan semak jawapan boleh-buka & senarai semak kendiri.',
-    badge: 'Interaktif',
-    starterHtml: `<h2>Aktiviti &amp; Semak Kefahaman</h2>
-<p>Klik pada soalan di bawah untuk menyemak jawapan dan penerangan selepas anda berfikir terlebih dahulu:</p>
-<details>
-  <summary>Soalan 1: Apakah perkara utama yang perlu diberi perhatian dalam topik ini?</summary>
-  <p><strong>Jawapan &amp; Penjelasan:</strong> Tulis jawapan lengkap dan penjelasan terperinci di sini untuk disemak oleh pelajar.</p>
-</details>
-<details>
-  <summary>Soalan 2: Bagaimanakah cara mengamalkan ilmu ini dengan betul?</summary>
-  <p><strong>Jawapan &amp; Penjelasan:</strong> Berikan contoh situasi praktikal supaya pelajar dapat menghayatinya.</p>
-</details>
-<h3>Senarai Semak Kendiri Pelajar</h3>
+    id: 'multimedia',
+    name: 'Nota Multimedia',
+    subtitle: 'Gabungan teks penerangan, gambar ilustrasi, video demonstrasi dan audio bacaan.',
+    badge: 'Multimedia',
+    starterHtml: `<h2>Panduan Multimedia Interaktif</h2>
+<p>Gabungkan teks penerangan bersama media pembelajaran menggunakan butang <strong>INSERT IMAGE</strong>, <strong>INSERT VIDEO</strong> dan <strong>INSERT AUDIO</strong> pada toolbar editor.</p>
+<h3>1. Penerangan &amp; Demonstrasi Visual</h3>
+<p>Sisipkan gambar rajah atau video demonstrasi (MP4/WEBM) di sini supaya pelajar dapat menonton terus di dalam halaman nota.</p>
+<h3>2. Rakaman Audio Bacaan / Sebutan</h3>
+<p>Sisipkan fail audio (MP3/WAV/M4A) untuk bacaan contoh, lafaz niat atau sebutan makhraj huruf yang betul.</p>
+<blockquote><strong>Panduan Pelajar:</strong> Dengar audio dan tonton video dengan teliti sambil mengikuti teks panduan yang disediakan.</blockquote>`,
+  },
+  {
+    id: 'step-by-step',
+    name: 'Nota Langkah demi Langkah',
+    subtitle: 'Panduan pelaksanaan atau tatacara ibadah mengikut urutan tertib.',
+    badge: 'Tatacara',
+    starterHtml: `<h2>Tatacara Pelaksanaan Mengikut Tertib</h2>
+<p>Ikuti langkah-langkah berikut secara berurutan bagi memastikan amalan dilakukan dengan sempurna:</p>
+<ol>
+  <li><strong>Langkah 1 — Persediaan Awal:</strong> Pastikan niat yang ikhlas, kebersihan diri dan syarat sah dipenuhi terlebih dahulu.</li>
+  <li><strong>Langkah 2 — Pelaksanaan Utama:</strong> Laksanakan pergerakan atau bacaan dengan tenang serta menjaga tuma'ninah.</li>
+  <li><strong>Langkah 3 — Semakan &amp; Penutup:</strong> Semak kesempurnaan rukun dan amalkan doa penutup yang disyariatkan.</li>
+</ol>
+<div class="iknow-callout"><strong>Peringatan Penting:</strong> Lakukan setiap langkah mengikut tertib dan elakkan tergesa-gesa.</div>`,
+  },
+  {
+    id: 'summary',
+    name: 'Nota Ringkasan',
+    subtitle: 'Isi penting, rumusan pantas dan poin utama untuk ulang kaji.',
+    badge: 'Ringkasan',
+    starterHtml: `<h2>Ringkasan &amp; Isi Penting Topik</h2>
 <ul>
-  <li>Saya telah memahami konsep asas topik ini.</li>
-  <li>Saya telah membaca contoh dan menonton media panduan yang disediakan.</li>
-  <li>Saya bersedia untuk menjawab kuiz penilaian topik.</li>
-</ul>`,
+  <li><strong>Konsep Teras:</strong> Nyatakan takrifan atau maksud utama dalam satu ayat padat.</li>
+  <li><strong>Syarat &amp; Rukun Utama:</strong> Senaraikan perkara asas yang wajib dipatuhi.</li>
+  <li><strong>Kesilapan Lazim:</strong> Nyatakan perkara yang perlu dielakkan oleh pelajar.</li>
+</ul>
+<h3>Jadual Kata Kunci Ulang Kaji</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Istilah / Hukum</th>
+      <th>Ringkasan Maksud</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Istilah 1</strong></td>
+      <td>Penerangan padat untuk ingatan pantas</td>
+    </tr>
+    <tr>
+      <td><strong>Istilah 2</strong></td>
+      <td>Penerangan padat untuk ingatan pantas</td>
+    </tr>
+  </tbody>
+</table>`,
   },
 ];
 
@@ -154,18 +147,44 @@ export function getTemplateById(id: NoteTemplateId): NoteTemplateDefinition {
 export interface ParsedNoteContent {
   isRichHtml: boolean;
   templateId: NoteTemplateId;
+  dalilKind: DalilKind;
+  dalilSource: string;
   html: string;
   plainText: string;
 }
 
 const VALID_TEMPLATE_IDS = new Set<NoteTemplateId>([
   'standard',
-  'illustrated',
+  'dalil',
+  'visual',
+  'multimedia',
   'step-by-step',
-  'infographic',
   'summary',
-  'interactive',
 ]);
+
+// Keserasian penuh dengan nota V1 yang mungkin menggunakan ID template terdahulu
+const LEGACY_TEMPLATE_MAP: Record<string, NoteTemplateId> = {
+  illustrated: 'visual',
+  infographic: 'visual',
+  interactive: 'standard',
+};
+
+function decodeHtmlAttr(val: string): string {
+  return val
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function encodeHtmlAttr(val: string): string {
+  return val
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 export function parseNoteContent(rawBody: string | null | undefined): ParsedNoteContent {
   const body = (rawBody ?? '').trim();
@@ -173,6 +192,8 @@ export function parseNoteContent(rawBody: string | null | undefined): ParsedNote
     return {
       isRichHtml: false,
       templateId: 'standard',
+      dalilKind: 'general',
+      dalilSource: '',
       html: '',
       plainText: '',
     };
@@ -180,27 +201,41 @@ export function parseNoteContent(rawBody: string | null | undefined): ParsedNote
 
   // Semak sama ada body mempunyai pembalut template I-KNOW
   const wrapperMatch = body.match(
-    /^<div\s+data-iknow-tpl="([a-z-]+)"[^>]*>([\s\S]*)<\/div>$/i
+    /^<div\s+([^>]*data-iknow-tpl="([a-z-]+)"[^>]*)>([\s\S]*)<\/div>$/i
   );
   if (wrapperMatch) {
-    const rawTpl = wrapperMatch[1] as NoteTemplateId;
-    const templateId = VALID_TEMPLATE_IDS.has(rawTpl) ? rawTpl : 'standard';
+    const attrString = wrapperMatch[1];
+    const rawTpl = wrapperMatch[2].toLowerCase();
+    const mappedTpl = LEGACY_TEMPLATE_MAP[rawTpl] ?? (rawTpl as NoteTemplateId);
+    const templateId = VALID_TEMPLATE_IDS.has(mappedTpl) ? mappedTpl : 'standard';
+
+    const dalilKindMatch = attrString.match(/data-iknow-dalil-kind="(general|quran|hadith)"/i);
+    const dalilKind = (dalilKindMatch?.[1]?.toLowerCase() as DalilKind) || 'general';
+
+    const dalilSrcMatch = attrString.match(/data-iknow-dalil-src="([^"]*)"/i);
+    const dalilSource = dalilSrcMatch ? decodeHtmlAttr(dalilSrcMatch[1]).trim() : '';
+
     return {
       isRichHtml: true,
       templateId,
-      html: wrapperMatch[2].trim(),
-      plainText: stripHtmlToText(wrapperMatch[2]),
+      dalilKind,
+      dalilSource,
+      html: wrapperMatch[3].trim(),
+      plainText: stripHtmlToText(wrapperMatch[3]),
     };
   }
 
   // Semak jika mengandungi tag HTML kaya daripada penyuntingan terus
-  const looksLikeHtml = /<(p|h[1-4]|ul|ol|li|table|figure|img|video|div|blockquote|details|strong|em)\b/i.test(
-    body
-  );
+  const looksLikeHtml =
+    /<(p|h[1-4]|ul|ol|li|table|figure|img|video|audio|div|blockquote|details|strong|em)\b/i.test(
+      body
+    );
   if (looksLikeHtml) {
     return {
       isRichHtml: true,
       templateId: 'standard',
+      dalilKind: 'general',
+      dalilSource: '',
       html: body,
       plainText: stripHtmlToText(body),
     };
@@ -210,6 +245,8 @@ export function parseNoteContent(rawBody: string | null | undefined): ParsedNote
   return {
     isRichHtml: false,
     templateId: 'standard',
+    dalilKind: 'general',
+    dalilSource: '',
     html: plainTextToHtml(body),
     plainText: body,
   };
@@ -268,6 +305,7 @@ const ALLOWED_TAGS = new Set([
   'FIGCAPTION',
   'IMG',
   'VIDEO',
+  'AUDIO',
   'SOURCE',
   'DETAILS',
   'SUMMARY',
@@ -280,6 +318,8 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-family',
   'font-size',
   'text-align',
+  'direction',
+  'unicode-bidi',
   'width',
   'max-width',
   'font-weight',
@@ -372,6 +412,16 @@ export function sanitizeNoteHtml(rawHtml: string): string {
           continue;
         }
 
+        if (name === 'dir') {
+          const norm = val.trim().toLowerCase();
+          if (norm === 'rtl' || norm === 'ltr' || norm === 'auto') {
+            el.setAttribute('dir', norm);
+          } else {
+            el.removeAttribute('dir');
+          }
+          continue;
+        }
+
         if (name === 'src') {
           if (!isSafeHttpUrl(val)) {
             el.removeAttribute('src');
@@ -382,6 +432,7 @@ export function sanitizeNoteHtml(rawHtml: string): string {
         const allowedAttr =
           name === 'alt' ||
           name === 'title' ||
+          name === 'lang' ||
           name === 'controls' ||
           name === 'playsinline' ||
           name === 'preload' ||
@@ -410,6 +461,13 @@ export function sanitizeNoteHtml(rawHtml: string): string {
         }
       }
 
+      if (tag === 'AUDIO') {
+        el.setAttribute('controls', '');
+        if (!el.getAttribute('preload')) {
+          el.setAttribute('preload', 'metadata');
+        }
+      }
+
       if (tag === 'IMG') {
         if (!el.getAttribute('src')) {
           el.remove();
@@ -427,7 +485,11 @@ export function sanitizeNoteHtml(rawHtml: string): string {
 
 export function serializeNoteContent(
   html: string,
-  templateId: NoteTemplateId
+  templateId: NoteTemplateId,
+  dalilMeta?: {
+    dalilKind?: DalilKind;
+    dalilSource?: string;
+  }
 ): string {
   const sanitized = sanitizeNoteHtml(html);
   // Padatkan whitespace antara tag supaya lebih jimat ruang dalam had 8000 aksara Firestore
@@ -435,6 +497,18 @@ export function serializeNoteContent(
     .replace(/>\s+</g, '><')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  if (!compacted) return '';
-  return `<div data-iknow-tpl="${templateId}">${compacted}</div>`;
+  const kind = dalilMeta?.dalilKind && dalilMeta.dalilKind !== 'general' ? dalilMeta.dalilKind : '';
+  const src = dalilMeta?.dalilSource?.trim() ? encodeHtmlAttr(dalilMeta.dalilSource.trim().slice(0, 180)) : '';
+
+  if (!compacted && !kind && !src) return '';
+
+  const attrs = [
+    `data-iknow-tpl="${templateId}"`,
+    kind ? `data-iknow-dalil-kind="${kind}"` : '',
+    src ? `data-iknow-dalil-src="${src}"` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return `<div ${attrs}>${compacted}</div>`;
 }

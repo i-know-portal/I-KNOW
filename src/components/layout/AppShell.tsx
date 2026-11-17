@@ -134,10 +134,10 @@ export function AppShell({
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col lg:pl-64 pb-20 lg:pb-0">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-1 min-w-0 flex-col lg:pl-64 pb-24 lg:pb-8 overflow-x-hidden">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 backdrop-blur px-5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="lg:hidden text-base font-bold text-emerald-900 whitespace-nowrap shrink-0">
+            <span className="lg:hidden text-base font-bold text-[#064e3b] whitespace-nowrap shrink-0">
               I-KNOW
             </span>
             <span className="hidden lg:inline text-sm font-medium text-slate-500 truncate">
@@ -173,7 +173,7 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-5 py-6 sm:px-6 lg:px-8">
           {children}
         </main>
       </div>

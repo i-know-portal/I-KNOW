@@ -102,6 +102,18 @@ export function validateVideoFile(file: File): string | null {
   return null;
 }
 
+export function validateAudioFile(file: File): string | null {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const validExt = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'webm'].includes(ext);
+  if (!AUDIO_ALLOWED_TYPES.has(file.type) && !validExt) {
+    return 'Format fail audio tidak disokong. Sila pilih fail MP3, WAV, OGG, AAC atau M4A.';
+  }
+  if (file.size > AUDIO_MAX_BYTES) {
+    return 'Saiz fail audio melebihi had maksimum 30 MB. Sila kecilkan fail audio dan cuba lagi.';
+  }
+  return null;
+}
+
 export function validateMaterialFile(
   file: File,
   materialType: Exclude<MaterialType, 'youtube'>
@@ -220,6 +232,30 @@ export async function uploadNoteVideo(
   const ext = file.name.split('.').pop()?.toLowerCase();
   const fallbackMime = ext === 'webm' ? 'video/webm' : 'video/mp4';
   const path = `iknow_media/notes/${safeTopic}/videos/${Date.now()}_${sanitizeFilename(file.name)}`;
+  return uploadFileToPath(file, path, fallbackMime, onProgress, onTaskCreated);
+}
+
+export async function uploadNoteAudio(
+  file: File,
+  topicId: string,
+  onProgress?: (info: UploadProgressInfo) => void,
+  onTaskCreated?: (task: UploadTask) => void
+): Promise<UploadedMediaResult> {
+  const validationError = validateAudioFile(file);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+  const safeTopic = topicId.replace(/[^a-zA-Z0-9_-]/g, '_') || 'umum';
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const fallbackMime =
+    ext === 'wav'
+      ? 'audio/wav'
+      : ext === 'ogg'
+        ? 'audio/ogg'
+        : ext === 'm4a'
+          ? 'audio/mp4'
+          : 'audio/mpeg';
+  const path = `iknow_media/notes/${safeTopic}/audio/${Date.now()}_${sanitizeFilename(file.name)}`;
   return uploadFileToPath(file, path, fallbackMime, onProgress, onTaskCreated);
 }
 
