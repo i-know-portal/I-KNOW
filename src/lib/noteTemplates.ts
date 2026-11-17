@@ -286,6 +286,10 @@ const ALLOWED_TAGS = new Set([
   'I',
   'U',
   'S',
+  'STRIKE',
+  'SUB',
+  'SUP',
+  'MARK',
   'H1',
   'H2',
   'H3',
@@ -318,6 +322,16 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-family',
   'font-size',
   'text-align',
+  'text-justify',
+  'line-height',
+  'margin-top',
+  'margin-bottom',
+  'margin-left',
+  'margin-right',
+  'margin-inline-start',
+  'padding-left',
+  'padding-right',
+  'padding-inline-start',
   'direction',
   'unicode-bidi',
   'width',
@@ -325,6 +339,7 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-weight',
   'font-style',
   'text-decoration',
+  'vertical-align',
 ]);
 
 function sanitizeStyleAttribute(rawStyle: string): string {
@@ -383,6 +398,15 @@ export function sanitizeNoteHtml(rawHtml: string): string {
         el.replaceWith(fragment);
         cleanNode(node);
         return;
+      }
+
+      // Tukar atribut align legasi (jika dijana pelayar) kepada style text-align
+      const legacyAlign = el.getAttribute('align')?.trim().toLowerCase();
+      if (legacyAlign && ['left', 'center', 'right', 'justify'].includes(legacyAlign)) {
+        if (!el.style.textAlign) {
+          el.style.textAlign = legacyAlign;
+        }
+        el.removeAttribute('align');
       }
 
       // Bersihkan atribut berbahaya
@@ -493,9 +517,10 @@ export function serializeNoteContent(
 ): string {
   const sanitized = sanitizeNoteHtml(html);
   // Padatkan whitespace antara tag supaya lebih jimat ruang dalam had 8000 aksara Firestore
+  // Kekalkan aksara unikod Arab/Jawi serta tanda bacaan/harakat sepenuhnya
   const compacted = sanitized
     .replace(/>\s+</g, '><')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[ \t\r\n]{2,}/g, ' ')
     .trim();
   const kind = dalilMeta?.dalilKind && dalilMeta.dalilKind !== 'general' ? dalilMeta.dalilKind : '';
   const src = dalilMeta?.dalilSource?.trim() ? encodeHtmlAttr(dalilMeta.dalilSource.trim().slice(0, 180)) : '';

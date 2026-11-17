@@ -1,11 +1,16 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import type {UploadTask} from 'firebase/storage';
 import {
+  AArrowDown,
+  AArrowUp,
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
+  Baseline,
   Bold,
   Check,
+  ChevronDown,
   Columns,
   Eye,
   FileText,
@@ -13,6 +18,8 @@ import {
   Headphones,
   Highlighter,
   ImagePlus,
+  IndentDecrease,
+  IndentIncrease,
   Italic,
   Languages,
   LayoutTemplate,
@@ -20,13 +27,17 @@ import {
   ListOrdered,
   Loader2,
   Maximize2,
-  Palette,
+  MoveVertical,
   Pause,
   Play,
   Plus,
   Redo2,
   RefreshCw,
   Rows,
+  SeparatorHorizontal,
+  Strikethrough,
+  Subscript,
+  Superscript,
   Table2,
   Trash2,
   Underline,
@@ -34,6 +45,16 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import {
+  applyBlockAlignment,
+  applyBlockIndent,
+  applyBlockSpacing,
+  applyDirectionFormatting,
+  applyInlineSpanStyle,
+  getClosestBlock,
+  getSelectionFontSizePx,
+  type ParagraphAlignment,
+} from '../../lib/editorFormatting';
 import {
   CONTENT_BODY_MAX_LENGTH,
   getTemplateById,
@@ -69,31 +90,65 @@ interface SelectedMediaState {
 }
 
 const FONT_FAMILIES = [
-  {label: 'Lalai (Plus Jakarta Sans)', value: 'Plus Jakarta Sans, sans-serif'},
-  {label: 'Amiri (Tulisan Arab)', value: 'Amiri, serif'},
-  {label: 'Serif (Georgia)', value: 'Georgia, serif'},
-  {label: 'Sans (Arial)', value: 'Arial, sans-serif'},
-  {label: 'Monospace (JetBrains Mono)', value: 'JetBrains Mono, monospace'},
+  {label: 'Plus Jakarta Sans (Lalai)', value: 'Plus Jakarta Sans, sans-serif'},
+  {label: 'Roboto', value: 'Roboto, sans-serif'},
+  {label: 'Arial', value: 'Arial, sans-serif'},
+  {label: 'Georgia (Serif)', value: 'Georgia, serif'},
+  {label: 'Times New Roman', value: '"Times New Roman", Times, serif'},
+  {label: 'Amiri (Arab & Jawi)', value: 'Amiri, Noto Naskh Arabic, serif'},
+  {label: 'Noto Naskh Arabic (Arab & Jawi)', value: '"Noto Naskh Arabic", Amiri, serif'},
+  {label: 'JetBrains Mono', value: 'JetBrains Mono, monospace'},
 ];
 
-const FONT_SIZES = ['12px', '14px', '16px', '18px', '20px', '24px', '28px'];
+const FONT_SIZES = [
+  '11px',
+  '12px',
+  '14px',
+  '16px',
+  '18px',
+  '20px',
+  '24px',
+  '28px',
+  '32px',
+  '36px',
+];
 
-const TEXT_COLORS = [
-  {label: 'Gelap', value: '#0f172a'},
+const ACADEMIC_TEXT_COLORS = [
+  {label: 'Hitam Dakwat', value: '#0f172a'},
+  {label: 'Kelabu Akademik', value: '#475569'},
   {label: 'Hijau I-KNOW', value: '#064e3b'},
   {label: 'Zamrud', value: '#047857'},
-  {label: 'Emas', value: '#b45309'},
-  {label: 'Biru', value: '#1d4ed8'},
-  {label: 'Merah', value: '#b91c1c'},
+  {label: 'Biru Akademik', value: '#1d4ed8'},
+  {label: 'Emas / Perang', value: '#b45309'},
+  {label: 'Merah Penekanan', value: '#b91c1c'},
+  {label: 'Ungu', value: '#6d28d9'},
 ];
 
-const HIGHLIGHT_COLORS = [
-  {label: 'Tiada', value: 'transparent'},
-  {label: 'Krim Lembut', value: '#fbf7ee'},
-  {label: 'Kuning Lembut', value: '#fef08a'},
+const ACADEMIC_HIGHLIGHT_COLORS = [
+  {label: 'Tiada Latar', value: 'transparent'},
+  {label: 'Kuning Penanda', value: '#fef08a'},
   {label: 'Hijau Lembut', value: '#bbf7d0'},
-  {label: 'Biru Lembut', value: '#bfdbfe'},
-  {label: 'Merah Lembut', value: '#fecaca'},
+  {label: 'Krim Dalil', value: '#fbf7ee'},
+  {label: 'Biru Lembut', value: '#dbeafe'},
+  {label: 'Merah Jambu Lembut', value: '#fce7f3'},
+  {label: 'Jingga Lembut', value: '#fed7aa'},
+  {label: 'Kelabu Muda', value: '#f1f5f9'},
+];
+
+const LINE_SPACINGS = [
+  {label: '1.15 (Padat)', value: '1.15'},
+  {label: '1.35', value: '1.35'},
+  {label: '1.50', value: '1.5'},
+  {label: '1.75 (Lalai)', value: '1.75'},
+  {label: '2.00 (Akademik)', value: '2'},
+  {label: '2.40 (Arab Berbaris)', value: '2.4'},
+];
+
+const PARAGRAPH_SPACINGS = [
+  {label: 'Rapat (4px)', value: '4px'},
+  {label: 'Normal (10px)', value: '10px'},
+  {label: 'Selesa (18px)', value: '18px'},
+  {label: 'Luas (26px)', value: '26px'},
 ];
 
 function parsePercentWidth(raw: string | null | undefined, fallback: number): number {
@@ -136,23 +191,29 @@ export function RichNoteEditor({
     bold: false,
     italic: false,
     underline: false,
+    strike: false,
+    sub: false,
+    sup: false,
     ul: false,
     ol: false,
-    left: false,
-    center: false,
-    right: false,
+    align: 'left' as ParagraphAlignment,
     rtl: false,
     block: 'p',
+    fontSizeLabel: '16px',
+    fontFamilyValue: '',
   });
   const [insideTable, setInsideTable] = useState(false);
 
-  // Popover jadual & warna
+  // Popover jadual, jarak & warna
   const [tablePopoverOpen, setTablePopoverOpen] = useState(false);
   const [tableRows, setTableRows] = useState(3);
   const [tableCols, setTableCols] = useState(3);
   const [tableHasHeader, setTableHasHeader] = useState(true);
   const [textColorOpen, setTextColorOpen] = useState(false);
+  const [activeTextColor, setActiveTextColor] = useState('#0f172a');
   const [highlightOpen, setHighlightOpen] = useState(false);
+  const [activeHighlightColor, setActiveHighlightColor] = useState('#fef08a');
+  const [spacingOpen, setSpacingOpen] = useState(false);
 
   // Keadaan muat naik media ke Firebase Storage
   const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | 'audio' | null>(null);
@@ -192,6 +253,13 @@ export function RichNoteEditor({
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
+  const closeToolbarPopovers = () => {
+    setTablePopoverOpen(false);
+    setTextColorOpen(false);
+    setHighlightOpen(false);
+    setSpacingOpen(false);
+  };
+
   const updateUndoRedoFlags = useCallback(() => {
     setCanUndo(historyIndexRef.current > 0);
     setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
@@ -203,7 +271,7 @@ export function RichNoteEditor({
       if (current === html) return;
       const sliced = historyRef.current.slice(0, historyIndexRef.current + 1);
       sliced.push(html);
-      if (sliced.length > 60) sliced.shift();
+      if (sliced.length > 80) sliced.shift();
       historyRef.current = sliced;
       historyIndexRef.current = sliced.length - 1;
       updateUndoRedoFlags();
@@ -236,7 +304,6 @@ export function RichNoteEditor({
     (recordHistory = true, overrideTemplate?: NoteTemplateId) => {
       const el = editorRef.current;
       if (!el) return;
-      // Jangan simpan atribut data-iknow-selected ke dalam HTML yang disimpan
       const clone = el.cloneNode(true) as HTMLElement;
       clone.querySelectorAll('[data-iknow-selected]').forEach((node) => {
         node.removeAttribute('data-iknow-selected');
@@ -260,30 +327,66 @@ export function RichNoteEditor({
     }
   }, []);
 
-  const restoreSelection = useCallback(() => {
+  const restoreSelection = useCallback((): Range | null => {
     const el = editorRef.current;
-    if (!el) return;
+    if (!el) return null;
     el.focus();
     const sel = window.getSelection();
-    if (!sel) return;
+    if (!sel) return null;
     if (savedRangeRef.current && el.contains(savedRangeRef.current.commonAncestorContainer)) {
       sel.removeAllRanges();
       sel.addRange(savedRangeRef.current);
+      return savedRangeRef.current;
     }
+    if (sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      return sel.getRangeAt(0);
+    }
+    return null;
   }, []);
 
   const refreshActiveFormats = useCallback(() => {
+    const root = editorRef.current;
     const sel = window.getSelection();
-    if (!sel || !editorRef.current) return;
-    let isRtl = false;
-    if (sel.rangeCount > 0) {
-      const node = sel.getRangeAt(0).commonAncestorContainer;
-      if (!editorRef.current.contains(node)) return;
-      const elem = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
-      setInsideTable(Boolean(elem?.closest('table')));
-      const dirBlock = elem?.closest('[dir]') as HTMLElement | null;
-      isRtl = dirBlock?.getAttribute('dir')?.toLowerCase() === 'rtl';
+    if (!sel || !root || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    if (!root.contains(node)) return;
+
+    const elem = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+    setInsideTable(Boolean(elem?.closest('table')));
+
+    const dirEl = elem?.closest('[dir]') as HTMLElement | null;
+    const computedDir = elem ? window.getComputedStyle(elem).direction : 'ltr';
+    const isRtl =
+      dirEl && root.contains(dirEl)
+        ? dirEl.getAttribute('dir')?.toLowerCase() === 'rtl'
+        : computedDir === 'rtl';
+
+    const closestBlock = getClosestBlock(root, node);
+    const rawAlign =
+      closestBlock?.style.textAlign ||
+      (closestBlock ? window.getComputedStyle(closestBlock).textAlign : '') ||
+      'left';
+    const normAlign: ParagraphAlignment =
+      rawAlign === 'center' || rawAlign === 'right' || rawAlign === 'justify'
+        ? rawAlign
+        : isRtl
+          ? 'right'
+          : 'left';
+
+    const px = getSelectionFontSizePx(root, range);
+
+    let fontFamilyValue = '';
+    const inlineFontEl = elem?.closest('[style*="font-family"]') as HTMLElement | null;
+    if (inlineFontEl && root.contains(inlineFontEl)) {
+      const ff = inlineFontEl.style.fontFamily.toLowerCase();
+      const matchedFont = FONT_FAMILIES.find((item) =>
+        ff.includes(item.value.split(',')[0].replace(/["']/g, '').toLowerCase())
+      );
+      if (matchedFont) fontFamilyValue = matchedFont.value;
     }
+
     try {
       const blockVal = String(document.queryCommandValue('formatBlock') || 'p')
         .replace(/[<>]/g, '')
@@ -292,16 +395,25 @@ export function RichNoteEditor({
         bold: document.queryCommandState('bold'),
         italic: document.queryCommandState('italic'),
         underline: document.queryCommandState('underline'),
+        strike: document.queryCommandState('strikeThrough'),
+        sub: document.queryCommandState('subscript'),
+        sup: document.queryCommandState('superscript'),
         ul: document.queryCommandState('insertUnorderedList'),
         ol: document.queryCommandState('insertOrderedList'),
-        left: document.queryCommandState('justifyLeft'),
-        center: document.queryCommandState('justifyCenter'),
-        right: document.queryCommandState('justifyRight'),
+        align: normAlign,
         rtl: isRtl,
         block: ['h1', 'h2', 'h3', 'p'].includes(blockVal) ? blockVal : 'p',
+        fontSizeLabel: `${px}px`,
+        fontFamilyValue,
       });
     } catch {
-      setActiveFormats((prev) => ({...prev, rtl: isRtl}));
+      setActiveFormats((prev) => ({
+        ...prev,
+        align: normAlign,
+        rtl: isRtl,
+        fontSizeLabel: `${px}px`,
+        fontFamilyValue,
+      }));
     }
   }, []);
 
@@ -322,119 +434,111 @@ export function RichNoteEditor({
     emitEditorChange(true);
   };
 
-  // Pemformatan Tulisan Arab & Arah RTL / LTR
+  // Penjajaran perenggan tepat (Kiri, Tengah, Kanan, Justify) hanya pada perenggan dipilih
+  const handleAlign = (align: ParagraphAlignment) => {
+    const root = editorRef.current;
+    if (!root) return;
+    const range = restoreSelection();
+    if (!range) return;
+    applyBlockAlignment(root, range, align);
+    saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  // Indent & Outdent tanpa menukar perenggan kepada blockquote
+  const handleIndent = (deltaPx: number) => {
+    const root = editorRef.current;
+    if (!root) return;
+    const range = restoreSelection();
+    if (!range) return;
+    applyBlockIndent(root, range, deltaPx);
+    saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  // Jarak baris & jarak antara perenggan
+  const handleSpacing = (options: {lineHeight?: string; marginBottom?: string}) => {
+    const root = editorRef.current;
+    if (!root) return;
+    const range = restoreSelection();
+    if (!range) return;
+    applyBlockSpacing(root, range, options);
+    saveSelection();
+    emitEditorChange(true);
+  };
+
+  // Pemformatan Tulisan Arab & Jawi RTL / LTR
   const handleSetDirection = (dir: 'rtl' | 'ltr') => {
     const root = editorRef.current;
     if (!root) return;
-    restoreSelection();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    const node = range.commonAncestorContainer;
-    const elem = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
-    const blockEl = elem?.closest('p, div, h1, h2, h3, li, blockquote, td, th') as HTMLElement | null;
-
-    if (blockEl && blockEl !== root && root.contains(blockEl)) {
-      if (dir === 'rtl') {
-        blockEl.setAttribute('dir', 'rtl');
-        blockEl.style.direction = 'rtl';
-        blockEl.style.textAlign = 'right';
-        if (!blockEl.style.fontFamily) {
-          blockEl.style.fontFamily = 'Amiri, serif';
-        }
-      } else {
-        blockEl.setAttribute('dir', 'ltr');
-        blockEl.style.direction = 'ltr';
-        blockEl.style.textAlign = 'left';
-        if (blockEl.style.fontFamily.includes('Amiri')) {
-          blockEl.style.fontFamily = 'Plus Jakarta Sans, sans-serif';
-        }
-      }
-    } else if (!range.collapsed) {
-      const span = document.createElement('span');
-      span.setAttribute('dir', dir);
-      span.style.direction = dir;
-      if (dir === 'rtl') {
-        span.style.fontFamily = 'Amiri, serif';
-        span.style.fontSize = '22px';
-      }
-      try {
-        range.surroundContents(span);
-      } catch {
-        const frag = range.extractContents();
-        span.appendChild(frag);
-        range.insertNode(span);
-      }
-    } else {
-      const p = document.createElement('p');
-      p.setAttribute('dir', dir);
-      p.style.direction = dir;
-      p.style.textAlign = dir === 'rtl' ? 'right' : 'left';
-      if (dir === 'rtl') {
-        p.style.fontFamily = 'Amiri, serif';
-        p.style.fontSize = '22px';
-        p.textContent = 'اكتب النص العربي هنا';
-      } else {
-        p.innerHTML = '<br>';
-      }
-      root.appendChild(p);
-    }
-
+    const range = restoreSelection();
+    if (!range) return;
+    applyDirectionFormatting(root, range, dir, {autoApplyArabicFont: true});
     saveSelection();
     refreshActiveFormats();
     emitEditorChange(true);
   };
 
   const handleApplyFontSize = (sizePx: string) => {
-    restoreSelection();
+    const root = editorRef.current;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (range.collapsed) {
-      const span = document.createElement('span');
-      span.style.fontSize = sizePx;
-      span.innerHTML = '&#8203;';
-      range.insertNode(span);
-      range.setStart(span.firstChild!, 1);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const span = document.createElement('span');
-      span.style.fontSize = sizePx;
-      try {
-        range.surroundContents(span);
-      } catch {
-        const frag = range.extractContents();
-        span.appendChild(frag);
-        range.insertNode(span);
-      }
-      sel.removeAllRanges();
-      const nextRange = document.createRange();
-      nextRange.selectNodeContents(span);
-      sel.addRange(nextRange);
-    }
+    const range = restoreSelection();
+    if (!root || !sel || !range) return;
+    applyInlineSpanStyle(root, sel, range, 'fontSize', sizePx);
     saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  const handleStepFontSize = (deltaPx: number) => {
+    const root = editorRef.current;
+    const sel = window.getSelection();
+    const range = restoreSelection();
+    if (!root || !sel || !range) return;
+    const currentPx = getSelectionFontSizePx(root, range);
+    const nextPx = Math.max(11, Math.min(40, currentPx + deltaPx));
+    applyInlineSpanStyle(root, sel, range, 'fontSize', `${nextPx}px`);
+    saveSelection();
+    refreshActiveFormats();
     emitEditorChange(true);
   };
 
   const handleApplyFontFamily = (fontFamily: string) => {
-    restoreSelection();
+    const root = editorRef.current;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (range.collapsed) {
-      document.execCommand('fontName', false, fontFamily);
-    } else {
-      const span = document.createElement('span');
-      span.style.fontFamily = fontFamily;
-      try {
-        range.surroundContents(span);
-      } catch {
-        document.execCommand('fontName', false, fontFamily);
-      }
-    }
+    const range = restoreSelection();
+    if (!root || !sel || !range) return;
+    applyInlineSpanStyle(root, sel, range, 'fontFamily', fontFamily);
     saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  const handleApplyTextColor = (color: string) => {
+    const root = editorRef.current;
+    const sel = window.getSelection();
+    const range = restoreSelection();
+    if (!root || !sel || !range) return;
+    setActiveTextColor(color);
+    applyInlineSpanStyle(root, sel, range, 'color', color);
+    saveSelection();
+    refreshActiveFormats();
+    emitEditorChange(true);
+  };
+
+  const handleApplyHighlightColor = (color: string) => {
+    const root = editorRef.current;
+    const sel = window.getSelection();
+    const range = restoreSelection();
+    if (!root || !sel || !range) return;
+    if (color !== 'transparent') {
+      setActiveHighlightColor(color);
+    }
+    applyInlineSpanStyle(root, sel, range, 'backgroundColor', color);
+    saveSelection();
+    refreshActiveFormats();
     emitEditorChange(true);
   };
 
@@ -603,6 +707,7 @@ export function RichNoteEditor({
   };
 
   const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    closeToolbarPopovers();
     const target = e.target as HTMLElement;
     const figure = target.closest('figure.iknow-figure') as HTMLElement | null;
     const directImg = target.tagName === 'IMG' ? (target as HTMLImageElement) : null;
@@ -960,9 +1065,7 @@ export function RichNoteEditor({
         <div className="flex items-center gap-2 text-xs">
           <LayoutTemplate className="h-4 w-4 text-[#064e3b] shrink-0" />
           <span className="font-medium text-slate-600">Template Aktif:</span>
-          <span className="font-bold text-[#064e3b]">
-            {activeTemplate.name}
-          </span>
+          <span className="font-bold text-[#064e3b]">{activeTemplate.name}</span>
         </div>
         <button
           type="button"
@@ -983,7 +1086,7 @@ export function RichNoteEditor({
                 Pilih Template Susun Atur Nota
               </h4>
               <p className="text-xs text-slate-600">
-                Klik <strong>Pratonton</strong> untuk melihat susun atur sebelum memilih, atau klik terus pada kad untuk mula menulis. Semua teks dan media boleh disunting sepenuhnya selepas dipilih.
+                Klik <strong>Pratonton</strong> untuk melihat susun atur sebelum memilih, atau klik terus <strong>Gunakan</strong> untuk mula menulis. Semua format dan media boleh diubah suai selepas dipilih.
               </p>
             </div>
           </div>
@@ -1072,10 +1175,10 @@ export function RichNoteEditor({
         </div>
       )}
 
-      {/* Toolbar Editor Dokumen */}
+      {/* Toolbar Pemformatan Lengkap ala Microsoft Word */}
       <div className="rounded-2xl border border-slate-300 bg-white overflow-hidden">
-        <div className="border-b border-slate-200 bg-slate-50 p-2.5 space-y-2">
-          {/* Baris 1: Undo/Redo, Heading, Font Family, Font Size, Format Tulisan, Warna */}
+        <div className="border-b border-slate-200 bg-slate-50/95 p-2.5 space-y-2">
+          {/* Baris 1: Undo/Redo, Tajuk, Font Family, Saiz (+/-), Format Aksara, Warna & Highlight */}
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Undo & Redo */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
@@ -1085,7 +1188,8 @@ export function RichNoteEditor({
                 onClick={handleUndo}
                 disabled={!canUndo}
                 title="Undo (Ctrl+Z)"
-                className="rounded p-1.5 text-slate-700 hover:bg-slate-100 disabled:opacity-35"
+                aria-label="Undo"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100 disabled:opacity-35"
               >
                 <Undo2 className="h-3.5 w-3.5" />
               </button>
@@ -1095,36 +1199,36 @@ export function RichNoteEditor({
                 onClick={handleRedo}
                 disabled={!canRedo}
                 title="Redo (Ctrl+Y)"
-                className="rounded p-1.5 text-slate-700 hover:bg-slate-100 disabled:opacity-35"
+                aria-label="Redo"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100 disabled:opacity-35"
               >
                 <Redo2 className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {/* Tajuk P / H1 / H2 / H3 */}
+            {/* Gaya Tajuk H1 / H2 / H3 / Teks Biasa */}
             <select
               aria-label="Gaya Tajuk"
               value={activeFormats.block}
               onMouseDown={saveSelection}
               onChange={(e) => execCmd('formatBlock', `<${e.target.value}>`)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700"
+              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700"
             >
-              <option value="p">Perenggan Biasa</option>
+              <option value="p">Teks Biasa</option>
               <option value="h1">Tajuk H1</option>
               <option value="h2">Tajuk H2</option>
               <option value="h3">Tajuk H3</option>
             </select>
 
-            {/* Jenis Tulisan */}
+            {/* Jenis Tulisan (Font Family) */}
             <select
               aria-label="Jenis Tulisan"
-              defaultValue=""
+              value={activeFormats.fontFamilyValue}
               onMouseDown={saveSelection}
               onChange={(e) => {
                 if (e.target.value) handleApplyFontFamily(e.target.value);
-                e.target.value = '';
               }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 max-w-[160px]"
+              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 max-w-[175px]"
             >
               <option value="" disabled>
                 Jenis Tulisan
@@ -1136,37 +1240,63 @@ export function RichNoteEditor({
               ))}
             </select>
 
-            {/* Saiz Tulisan */}
-            <select
-              aria-label="Saiz Tulisan"
-              defaultValue=""
-              onMouseDown={saveSelection}
-              onChange={(e) => {
-                if (e.target.value) handleApplyFontSize(e.target.value);
-                e.target.value = '';
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
-            >
-              <option value="" disabled>
-                Saiz
-              </option>
-              {FONT_SIZES.map((sz) => (
-                <option key={sz} value={sz}>
-                  {sz}
+            {/* Saiz Tulisan Dropdown + Butang Besarkan / Kecilkan */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <select
+                aria-label="Saiz Tulisan"
+                value={
+                  FONT_SIZES.includes(activeFormats.fontSizeLabel)
+                    ? activeFormats.fontSizeLabel
+                    : ''
+                }
+                onMouseDown={saveSelection}
+                onChange={(e) => {
+                  if (e.target.value) handleApplyFontSize(e.target.value);
+                }}
+                className="h-8 rounded bg-transparent px-2 text-xs font-medium text-slate-700 focus:outline-none"
+              >
+                <option value="" disabled>
+                  {activeFormats.fontSizeLabel || 'Saiz'}
                 </option>
-              ))}
-            </select>
+                {FONT_SIZES.map((sz) => (
+                  <option key={sz} value={sz}>
+                    {sz}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleStepFontSize(2)}
+                title="Besarkan Saiz Tulisan (+2px)"
+                aria-label="Besarkan Saiz Tulisan"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100"
+              >
+                <AArrowUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleStepFontSize(-2)}
+                title="Kecilkan Saiz Tulisan (-2px)"
+                aria-label="Kecilkan Saiz Tulisan"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100"
+              >
+                <AArrowDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
 
-            {/* Bold, Italic, Underline */}
+            {/* Bold, Italic, Underline, Strikethrough, Subscript, Superscript */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => execCmd('bold')}
-                title="Bold"
-                className={`rounded p-1.5 ${
+                title="Bold (Tebal)"
+                aria-label="Bold"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
                   activeFormats.bold
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-emerald-100 text-[#064e3b]'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
@@ -1176,10 +1306,11 @@ export function RichNoteEditor({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => execCmd('italic')}
-                title="Italic"
-                className={`rounded p-1.5 ${
+                title="Italic (Condong)"
+                aria-label="Italic"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
                   activeFormats.italic
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-emerald-100 text-[#064e3b]'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
@@ -1189,19 +1320,80 @@ export function RichNoteEditor({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => execCmd('underline')}
-                title="Underline"
-                className={`rounded p-1.5 ${
+                title="Underline (Garis Bawah)"
+                aria-label="Underline"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
                   activeFormats.underline
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-emerald-100 text-[#064e3b]'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <Underline className="h-3.5 w-3.5" />
               </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => execCmd('strikeThrough')}
+                title="Strikethrough (Garis Potong)"
+                aria-label="Strikethrough"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.strike
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Strikethrough className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => execCmd('subscript')}
+                title="Subscript"
+                aria-label="Subscript"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.sub
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Subscript className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => execCmd('superscript')}
+                title="Superscript"
+                aria-label="Superscript"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.sup
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Superscript className="h-3.5 w-3.5" />
+              </button>
             </div>
 
             {/* Warna Tulisan */}
-            <div className="relative">
+            <div className="relative flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                onClick={() => handleApplyTextColor(activeTextColor)}
+                title="Terapkan Warna Tulisan Semasa"
+                className="flex h-8 items-center gap-1 rounded px-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <span className="flex flex-col items-center leading-none">
+                  <Baseline className="h-3.5 w-3.5" />
+                  <span
+                    className="mt-0.5 h-1 w-4 rounded-full"
+                    style={{backgroundColor: activeTextColor}}
+                  />
+                </span>
+              </button>
               <button
                 type="button"
                 onMouseDown={(e) => {
@@ -1212,47 +1404,72 @@ export function RichNoteEditor({
                   setTextColorOpen((v) => !v);
                   setHighlightOpen(false);
                   setTablePopoverOpen(false);
+                  setSpacingOpen(false);
                 }}
-                title="Warna Tulisan"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                title="Pilih Warna Tulisan"
+                aria-label="Pilih Warna Tulisan"
+                className="flex h-8 w-6 items-center justify-center rounded text-slate-600 hover:bg-slate-100"
               >
-                <Palette className="h-3.5 w-3.5 text-[#064e3b]" />
-                Warna
+                <ChevronDown className="h-3 w-3" />
               </button>
               {textColorOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg space-y-2">
-                  <p className="text-[11px] font-semibold text-slate-600">Warna Tulisan</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {TEXT_COLORS.map((c) => (
+                <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg space-y-2.5">
+                  <p className="text-[11px] font-bold text-slate-700">
+                    Warna Tulisan Akademik
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {ACADEMIC_TEXT_COLORS.map((c) => (
                       <button
                         key={c.value}
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                          execCmd('foreColor', c.value);
+                          handleApplyTextColor(c.value);
                           setTextColorOpen(false);
                         }}
                         title={c.label}
-                        className="h-6 w-6 rounded-md border border-slate-300"
+                        className={`h-7 w-full rounded-md border transition-transform hover:scale-105 ${
+                          activeTextColor === c.value
+                            ? 'border-slate-900 ring-1 ring-slate-900'
+                            : 'border-slate-300'
+                        }`}
                         style={{backgroundColor: c.value}}
                       />
                     ))}
                   </div>
-                  <label className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-600">
-                    <span>Pilih warna lain:</span>
+                  <label className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] font-medium text-slate-600">
+                    <span>Color Picker Bebas:</span>
                     <input
                       type="color"
-                      defaultValue="#0f172a"
-                      onChange={(e) => execCmd('foreColor', e.target.value)}
-                      className="h-6 w-8 cursor-pointer rounded border border-slate-200"
+                      value={activeTextColor}
+                      onChange={(e) => handleApplyTextColor(e.target.value)}
+                      className="h-7 w-10 cursor-pointer rounded border border-slate-200"
                     />
                   </label>
                 </div>
               )}
             </div>
 
-            {/* Warna Latar Tulisan */}
-            <div className="relative">
+            {/* Warna Latar & Highlight Teks */}
+            <div className="relative flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                onClick={() => handleApplyHighlightColor(activeHighlightColor)}
+                title="Highlight Teks (1-Klik)"
+                className="flex h-8 items-center gap-1 rounded px-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <span className="flex flex-col items-center leading-none">
+                  <Highlighter className="h-3.5 w-3.5 text-amber-700" />
+                  <span
+                    className="mt-0.5 h-1 w-4 rounded-full border border-slate-300"
+                    style={{backgroundColor: activeHighlightColor}}
+                  />
+                </span>
+              </button>
               <button
                 type="button"
                 onMouseDown={(e) => {
@@ -1263,41 +1480,46 @@ export function RichNoteEditor({
                   setHighlightOpen((v) => !v);
                   setTextColorOpen(false);
                   setTablePopoverOpen(false);
+                  setSpacingOpen(false);
                 }}
-                title="Warna Latar Tulisan"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                title="Pilih Warna Highlight / Latar"
+                aria-label="Pilih Warna Highlight"
+                className="flex h-8 w-6 items-center justify-center rounded text-slate-600 hover:bg-slate-100"
               >
-                <Highlighter className="h-3.5 w-3.5 text-amber-700" />
-                Latar
+                <ChevronDown className="h-3 w-3" />
               </button>
               {highlightOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg space-y-2">
-                  <p className="text-[11px] font-semibold text-slate-600">Warna Latar Tulisan</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {HIGHLIGHT_COLORS.map((c) => (
+                <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg space-y-2.5">
+                  <p className="text-[11px] font-bold text-slate-700">
+                    Highlight &amp; Warna Latar Teks
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {ACADEMIC_HIGHLIGHT_COLORS.map((c) => (
                       <button
                         key={c.value}
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                          execCmd('hiliteColor', c.value);
+                          handleApplyHighlightColor(c.value);
                           setHighlightOpen(false);
                         }}
                         title={c.label}
-                        className="h-6 w-6 rounded-md border border-slate-300 text-[10px] font-bold text-slate-500"
-                        style={{backgroundColor: c.value === 'transparent' ? '#ffffff' : c.value}}
+                        className="h-7 w-full rounded-md border border-slate-300 text-xs font-bold text-slate-500 hover:scale-105 transition-transform"
+                        style={{
+                          backgroundColor: c.value === 'transparent' ? '#ffffff' : c.value,
+                        }}
                       >
                         {c.value === 'transparent' ? '×' : ''}
                       </button>
                     ))}
                   </div>
-                  <label className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-600">
-                    <span>Pilih warna latar:</span>
+                  <label className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] font-medium text-slate-600">
+                    <span>Warna Latar Bebas:</span>
                     <input
                       type="color"
-                      defaultValue="#fef08a"
-                      onChange={(e) => execCmd('hiliteColor', e.target.value)}
-                      className="h-6 w-8 cursor-pointer rounded border border-slate-200"
+                      value={activeHighlightColor}
+                      onChange={(e) => handleApplyHighlightColor(e.target.value)}
+                      className="h-7 w-10 cursor-pointer rounded border border-slate-200"
                     />
                   </label>
                 </div>
@@ -1305,18 +1527,79 @@ export function RichNoteEditor({
             </div>
           </div>
 
-          {/* Baris 2: Senarai, Penjajaran, Arab RTL/LTR, Jadual, INSERT IMAGE, INSERT VIDEO, INSERT AUDIO */}
+          {/* Baris 2: Penjajaran (termasuk Justify), Senarai, Indent/Outdent, Jarak Baris/Perenggan, Divider, Arab RTL/LTR, Jadual & Media */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* Senarai */}
+            {/* Penjajaran Perenggan: Left, Center, Right, Justify */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleAlign('left')}
+                title="Align Left (Jajar Kiri)"
+                aria-label="Align Left"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.align === 'left'
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlignLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleAlign('center')}
+                title="Align Center (Jajar Tengah)"
+                aria-label="Align Center"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.align === 'center'
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlignCenter className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleAlign('right')}
+                title="Align Right (Jajar Kanan)"
+                aria-label="Align Right"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.align === 'right'
+                    ? 'bg-emerald-100 text-[#064e3b]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlignRight className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleAlign('justify')}
+                title="Justify (Ratakan Kiri & Kanan)"
+                aria-label="Justify"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
+                  activeFormats.align === 'justify'
+                    ? 'bg-[#064e3b] text-white'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlignJustify className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Senarai Bullet, Bernombor & Indent / Outdent */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => execCmd('insertUnorderedList')}
                 title="Senarai Bullet"
-                className={`rounded p-1.5 ${
+                aria-label="Senarai Bullet"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
                   activeFormats.ul
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-emerald-100 text-[#064e3b]'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
@@ -1327,81 +1610,143 @@ export function RichNoteEditor({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => execCmd('insertOrderedList')}
                 title="Senarai Bernombor"
-                className={`rounded p-1.5 ${
+                aria-label="Senarai Bernombor"
+                className={`flex h-8 w-8 items-center justify-center rounded ${
                   activeFormats.ol
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-emerald-100 text-[#064e3b]'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <ListOrdered className="h-3.5 w-3.5" />
               </button>
-            </div>
-
-            {/* Penjajaran */}
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => execCmd('justifyLeft')}
-                title="Jajar Kiri"
-                className={`rounded p-1.5 ${
-                  activeFormats.left
-                    ? 'bg-emerald-100 text-emerald-900'
-                    : 'text-slate-700 hover:bg-slate-100'
-                }`}
+                onClick={() => handleIndent(-24)}
+                title="Outdent (Kurangkan Inden)"
+                aria-label="Outdent"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100"
               >
-                <AlignLeft className="h-3.5 w-3.5" />
+                <IndentDecrease className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => execCmd('justifyCenter')}
-                title="Jajar Tengah"
-                className={`rounded p-1.5 ${
-                  activeFormats.center
-                    ? 'bg-emerald-100 text-emerald-900'
-                    : 'text-slate-700 hover:bg-slate-100'
-                }`}
+                onClick={() => handleIndent(24)}
+                title="Indent (Tambah Inden)"
+                aria-label="Indent"
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-100"
               >
-                <AlignCenter className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => execCmd('justifyRight')}
-                title="Jajar Kanan"
-                className={`rounded p-1.5 ${
-                  activeFormats.right
-                    ? 'bg-emerald-100 text-emerald-900'
-                    : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <AlignRight className="h-3.5 w-3.5" />
+                <IndentIncrease className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {/* Pemformatan Arab & Arah RTL / LTR */}
+            {/* Jarak Baris (Line Spacing) & Jarak Perenggan */}
+            <div className="relative">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                onClick={() => {
+                  setSpacingOpen((v) => !v);
+                  setTextColorOpen(false);
+                  setHighlightOpen(false);
+                  setTablePopoverOpen(false);
+                }}
+                title="Jarak Baris & Jarak Perenggan"
+                className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <MoveVertical className="h-3.5 w-3.5 text-[#064e3b]" />
+                <span>Jarak</span>
+              </button>
+              {spacingOpen && (
+                <div className="absolute left-0 top-full z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 shadow-lg space-y-3">
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700 mb-1.5">
+                      Jarak Baris (Line Spacing)
+                    </p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {LINE_SPACINGS.map((ls) => (
+                        <button
+                          key={ls.value}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            handleSpacing({lineHeight: ls.value});
+                            setSpacingOpen(false);
+                          }}
+                          className="rounded-md border border-slate-200 px-2 py-1 text-left text-[11px] font-medium text-slate-700 hover:border-[#064e3b] hover:bg-[#f3faf6]"
+                        >
+                          {ls.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-100 pt-2.5">
+                    <p className="text-[11px] font-bold text-slate-700 mb-1.5">
+                      Jarak Antara Perenggan
+                    </p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {PARAGRAPH_SPACINGS.map((ps) => (
+                        <button
+                          key={ps.value}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            handleSpacing({marginBottom: ps.value});
+                            setSpacingOpen(false);
+                          }}
+                          className="rounded-md border border-slate-200 px-2 py-1 text-left text-[11px] font-medium text-slate-700 hover:border-[#064e3b] hover:bg-[#f3faf6]"
+                        >
+                          {ps.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pemisah Mendatar (Horizontal Divider) */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertHtmlAtCursor('<hr /><p><br></p>')}
+              title="Sisip Garis Pemisah Mendatar (Horizontal Divider)"
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              <SeparatorHorizontal className="h-3.5 w-3.5 text-slate-600" />
+              <span className="hidden sm:inline">Pemisah</span>
+            </button>
+
+            {/* Sokongan Tulisan Arab & Jawi RTL / LTR */}
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSetDirection('rtl')}
-                title="Format Teks Arab (Arah Kanan ke Kiri / RTL)"
-                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold ${
+                title="Format Tulisan Arab / Jawi (Arah Kanan ke Kiri / RTL)"
+                className={`inline-flex h-8 items-center gap-1 rounded px-2 text-[11px] font-semibold ${
                   activeFormats.rtl
                     ? 'bg-[#064e3b] text-white'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <Languages className="h-3.5 w-3.5" />
-                Arab RTL
+                Arab/Jawi RTL
               </button>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSetDirection('ltr')}
-                title="Arah Kiri ke Kanan (LTR)"
-                className="rounded px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                title="Arah Teks Biasa (Kiri ke Kanan / LTR)"
+                className={`h-8 rounded px-2 text-[11px] font-medium ${
+                  !activeFormats.rtl
+                    ? 'bg-slate-100 text-slate-900 font-semibold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
               >
                 LTR
               </button>
@@ -1419,15 +1764,16 @@ export function RichNoteEditor({
                   setTablePopoverOpen((v) => !v);
                   setTextColorOpen(false);
                   setHighlightOpen(false);
+                  setSpacingOpen(false);
                 }}
                 title="Sisip Jadual"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
               >
                 <Table2 className="h-3.5 w-3.5 text-[#064e3b]" />
-                Jadual
+                <span>Jadual</span>
               </button>
               {tablePopoverOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 shadow-lg space-y-2.5">
+                <div className="absolute left-0 top-full z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 shadow-lg space-y-2.5">
                   <p className="text-xs font-bold text-slate-900">Sisip Jadual Baharu</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -1488,7 +1834,7 @@ export function RichNoteEditor({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleTableAction('addRow')}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100"
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100"
                 >
                   <Rows className="h-3 w-3" /> +Baris
                 </button>
@@ -1496,7 +1842,7 @@ export function RichNoteEditor({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleTableAction('addCol')}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100"
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100"
                 >
                   <Columns className="h-3 w-3" /> +Lajur
                 </button>
@@ -1504,7 +1850,7 @@ export function RichNoteEditor({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleTableAction('delRow')}
-                  className="rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                  className="rounded px-1.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
                 >
                   -Baris
                 </button>
@@ -1512,7 +1858,7 @@ export function RichNoteEditor({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleTableAction('delTable')}
-                  className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100"
+                  className="rounded px-1.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100"
                 >
                   Padam Jadual
                 </button>
@@ -1533,7 +1879,7 @@ export function RichNoteEditor({
                 setMediaError(null);
                 imageInputRef.current?.click();
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#064e3b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#064e3b] px-3 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
             >
               <ImagePlus className="h-3.5 w-3.5" />
               INSERT IMAGE
@@ -1552,7 +1898,7 @@ export function RichNoteEditor({
                 setAudioDrawerOpen(false);
                 setVideoDrawerOpen((v) => !v);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-700 px-3 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
             >
               <Film className="h-3.5 w-3.5" />
               INSERT VIDEO
@@ -1571,7 +1917,7 @@ export function RichNoteEditor({
                 setVideoDrawerOpen(false);
                 setAudioDrawerOpen((v) => !v);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#064e3b] bg-white px-3 py-1.5 text-xs font-semibold text-[#064e3b] hover:bg-[#f3faf6] disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#064e3b] bg-white px-3 text-xs font-semibold text-[#064e3b] hover:bg-[#f3faf6] disabled:opacity-50"
             >
               <Headphones className="h-3.5 w-3.5" />
               INSERT AUDIO
@@ -1981,14 +2327,14 @@ export function RichNoteEditor({
               handleRedo();
             }
           }}
-          className={`iknow-rich-content iknow-tpl-${templateId} min-h-[280px] max-h-[560px] overflow-y-auto bg-white p-5 focus:outline-none`}
+          className={`iknow-rich-content iknow-tpl-${templateId} min-h-[300px] max-h-[580px] overflow-y-auto bg-white p-5 sm:p-6 focus:outline-none`}
         />
 
         {/* Footer Status Panjang Kandungan */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600">
           <span className="inline-flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5 text-slate-400" />
-            Klik mana-mana gambar, video atau audio dalam editor untuk melaraskan saiz, kedudukan atau kapsyen.
+            Pilih teks untuk memformat bahagian tertentu sahaja. Klik media untuk ubah saiz atau kapsyen.
           </span>
           <span
             className={`font-mono-tabular font-semibold ${

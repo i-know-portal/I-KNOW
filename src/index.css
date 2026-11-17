@@ -3,7 +3,7 @@
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    --font-arabic: 'Amiri', 'Traditional Arabic', serif;
+    --font-arabic: 'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   }
 
@@ -22,6 +22,7 @@
 
 .font-arabic {
   font-family: var(--font-arabic);
+  font-feature-settings: "liga" 1, "calt" 1, "mark" 1, "mkmk" 1;
   direction: rtl;
   line-height: 2.15;
 }
@@ -97,24 +98,78 @@
   margin: 0.65rem 0;
 }
 
+.iknow-rich-content [style*="text-align: justify"],
+.iknow-rich-content [style*="text-align:justify"] {
+  text-align: justify;
+  text-justify: inter-word;
+  text-wrap: normal;
+}
+
 .iknow-rich-content [dir="rtl"] {
   direction: rtl;
-  text-align: right;
+  unicode-bidi: isolate;
   font-family: var(--font-arabic);
-  font-size: 1.4em;
+  font-feature-settings: "liga" 1, "calt" 1, "mark" 1, "mkmk" 1;
   line-height: 2.15;
   color: #0f172a;
 }
 
+.iknow-rich-content [dir="rtl"]:not([style*="text-align"]) {
+  text-align: right;
+}
+
+.iknow-rich-content [dir="rtl"]:not([style*="font-size"]) {
+  font-size: 1.35em;
+}
+
+.iknow-rich-content [dir="ltr"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.iknow-rich-content s,
+.iknow-rich-content strike {
+  text-decoration: line-through;
+}
+
+.iknow-rich-content sub {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  bottom: -0.25em;
+}
+
+.iknow-rich-content sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  top: -0.45em;
+}
+
+.iknow-rich-content mark {
+  background-color: #fef08a;
+  color: inherit;
+  padding: 0.05em 0.2em;
+  border-radius: 0.2em;
+}
+
+.iknow-rich-content hr {
+  border: none;
+  border-top: 1px solid #cbd5e1;
+  margin: 1.35rem 0;
+}
+
 .iknow-rich-content ul {
   list-style-type: disc;
-  padding-left: 1.45rem;
+  padding-inline-start: 1.5rem;
   margin: 0.7rem 0;
 }
 
 .iknow-rich-content ol {
   list-style-type: decimal;
-  padding-left: 1.5rem;
+  padding-inline-start: 1.55rem;
   margin: 0.7rem 0;
 }
 
