@@ -13,6 +13,8 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import {db, handleFirestoreError, OperationType} from '../lib/firebase';
+import {hasBase64Media} from '../lib/noteTemplates';
+import {deleteStorageFile} from './storageService';
 import type {
   ActivityLog,
   ContentBlock,
@@ -334,6 +336,12 @@ export async function saveContentBlock(payload: {
   const docPath = `content_blocks/${id}`;
   const docRef = doc(db, 'content_blocks', id);
 
+  if (hasBase64Media(payload.body)) {
+    throw new Error(
+      'Fail imej atau video dalam bentuk Base64 tidak dibenarkan dalam Firestore.'
+    );
+  }
+
   try {
     const baseData = {
       id,
@@ -470,6 +478,9 @@ export async function deleteMaterial(material: Material): Promise<void> {
   const docPath = `materials/${material.id}`;
   try {
     await deleteDoc(doc(db, 'materials', material.id));
+    if (material.storage_path) {
+      await deleteStorageFile(material.storage_path);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, docPath);
   }

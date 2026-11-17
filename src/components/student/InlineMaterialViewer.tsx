@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import {formatBytes, getYoutubeEmbedUrl} from '../../lib/youtube';
 import type {Material} from '../../types/database';
+import {InlineNoteVideoPlayer} from '../common/NoteContentRenderer';
 
 export function MaterialTypeLabel(type: Material['material_type']): string {
   switch (type) {
@@ -134,11 +135,7 @@ export function InlineMaterialViewer({material}: {material: Material}) {
         )}
 
         {mediaUrl && material.material_type === 'video' && (
-          <div className="overflow-hidden rounded-lg bg-slate-950">
-            <video controls className="max-h-[480px] w-full" src={mediaUrl}>
-              Pelayar anda tidak menyokong pemain video terbina dalam.
-            </video>
-          </div>
+          <InlineNoteVideoPlayer src={mediaUrl} />
         )}
       </div>
     </article>

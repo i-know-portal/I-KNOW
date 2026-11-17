@@ -1,4 +1,5 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
+import type {UploadTask} from 'firebase/storage';
 import {
   AlertCircle,
   CheckCircle2,
@@ -7,10 +8,11 @@ import {
   Link2,
   Loader2,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
-import {extractYoutubeId} from '../../lib/youtube';
+import {extractYoutubeId, formatBytes} from '../../lib/youtube';
 import {
   deleteMaterial,
   fetchMaterials,
@@ -19,6 +21,10 @@ import {
   fetchTopics,
   saveMaterial,
 } from '../../services/learningService';
+import {
+  uploadMaterialFile,
+  type UploadProgressInfo,
+} from '../../services/storageService';
 import type {
   LearningModule,
   Material,
@@ -52,8 +58,17 @@ export function AdminMaterialsManager() {
   const [status, setStatus] = useState<PublishStatus>('Published');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [fileUrl, setFileUrl] = useState('');
+  const [storagePath, setStoragePath] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
+  const [fileSizeBytes, setFileSizeBytes] = useState<number | null>(null);
+  const [uploadMode, setUploadMode] = useState<'upload' | 'url'>('upload');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressInfo | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTaskRef = useRef<UploadTask | null>(null);
 
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [confirmDeleteMat, setConfirmDeleteMat] = useState<Material | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
@@ -108,6 +123,9 @@ export function AdminMaterialsManager() {
     setStatus('Published');
     setYoutubeUrl('');
     setFileUrl('');
+    setStoragePath(null);
+    setMimeType(null);
+    setFileSizeBytes(null);
     setSubtopicId('');
   };
 
@@ -122,6 +140,51 @@ export function AdminMaterialsManager() {
     setStatus(mat.status);
     setYoutubeUrl(mat.youtube_url || '');
     setFileUrl(mat.file_url || '');
+    setStoragePath(mat.storage_path || null);
+    setMimeType(mat.mime_type || null);
+    setFileSizeBytes(mat.file_size_bytes ?? null);
+    setUploadMode(mat.storage_path ? 'upload' : 'url');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || materialType === 'youtube') return;
+
+    setNotice(null);
+    setUploading(true);
+    setUploadProgress({percent: 0, bytesTransferred: 0, totalBytes: file.size});
+    try {
+      const res = await uploadMaterialFile(
+        file,
+        materialType,
+        topicId || 'umum',
+        (info) => setUploadProgress(info),
+        (task) => {
+          uploadTaskRef.current = task;
+        }
+      );
+      setFileUrl(res.url);
+      setStoragePath(res.storagePath);
+      setMimeType(res.mimeType);
+      setFileSizeBytes(res.sizeBytes);
+      if (!title.trim()) {
+        setTitle(file.name.replace(/\.[^.]+$/, ''));
+      }
+      setNotice({
+        type: 'success',
+        text: `Fail "${file.name}" berjaya dimuat naik ke Firebase Storage.`,
+      });
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Gagal memuat naik fail.',
+      });
+    } finally {
+      uploadTaskRef.current = null;
+      setUploading(false);
+      setUploadProgress(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -144,7 +207,7 @@ export function AdminMaterialsManager() {
     } else if (!fileUrl.trim().startsWith('http')) {
       setNotice({
         type: 'error',
-        text: 'Sila masukkan pautan URL bahan yang sah (bermula dengan https://).',
+        text: 'Sila muat naik fail ke Firebase Storage atau masukkan pautan URL bahan yang sah (https://).',
       });
       return;
     }
@@ -159,11 +222,11 @@ export function AdminMaterialsManager() {
         title: title.trim(),
         description: description.trim(),
         material_type: materialType,
-        storage_path: null,
+        storage_path: materialType === 'youtube' ? null : storagePath,
         file_url: materialType === 'youtube' ? null : fileUrl.trim(),
         youtube_url: materialType === 'youtube' ? youtubeUrl.trim() : null,
-        mime_type: null,
-        file_size_bytes: null,
+        mime_type: materialType === 'youtube' ? null : mimeType,
+        file_size_bytes: materialType === 'youtube' ? null : fileSizeBytes,
         status,
         uploaded_by: user?.uid ?? null,
       });
@@ -195,12 +258,13 @@ export function AdminMaterialsManager() {
         title: mat.title,
         description: mat.description,
         material_type: mat.material_type,
-        storage_path: null,
+        storage_path: mat.storage_path,
         file_url: mat.file_url,
         youtube_url: mat.youtube_url,
-        mime_type: null,
-        file_size_bytes: null,
+        mime_type: mat.mime_type,
+        file_size_bytes: mat.file_size_bytes,
         status: nextStatus,
+        uploaded_by: mat.uploaded_by,
       });
       await loadAll();
     } catch (err) {
@@ -214,6 +278,7 @@ export function AdminMaterialsManager() {
   const handleDelete = async (mat: Material) => {
     try {
       await deleteMaterial(mat);
+      setConfirmDeleteMat(null);
       await loadAll();
       setNotice({type: 'success', text: `Bahan "${mat.title}" berjaya dipadam.`});
     } catch (err) {
@@ -237,12 +302,10 @@ export function AdminMaterialsManager() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">
-          Pengurusan Bahan Pembelajaran (Cloud Firestore)
+          Pengurusan Bahan Pembelajaran (Firebase Storage &amp; Firestore)
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Pautkan PDF, imej, audio, video atau video YouTube ke topik dan subtopik.
-          Firebase Storage tidak diaktifkan; gunakan pautan URL dalam talian (contoh:
-          Google Drive, CDN awam atau YouTube).
+          Muat naik PDF, imej, audio dan video MP4/WEBM terus ke Firebase Storage atau pautkan video YouTube ke topik dan subtopik.
         </p>
       </div>
 
@@ -368,10 +431,10 @@ export function AdminMaterialsManager() {
                 className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm"
               >
                 <option value="youtube">Video YouTube</option>
-                <option value="pdf">Dokumen PDF (URL)</option>
-                <option value="image">Gambar (URL)</option>
-                <option value="audio">Audio (URL)</option>
-                <option value="video">Video MP4 (URL)</option>
+                <option value="image">Gambar (Muat Naik / URL)</option>
+                <option value="video">Video MP4 / WEBM</option>
+                <option value="pdf">Dokumen PDF</option>
+                <option value="audio">Audio</option>
               </select>
             </div>
             <div>
@@ -418,19 +481,123 @@ export function AdminMaterialsManager() {
             />
           </div>
         ) : (
-          <div>
-            <label className="block text-xs font-medium text-slate-700">
-              Pautan URL Bahan ({MaterialTypeLabel(materialType)})
-            </label>
-            <input
-              type="url"
-              required
-              maxLength={1000}
-              value={fileUrl}
-              onChange={(e) => setFileUrl(e.target.value)}
-              placeholder="https://drive.google.com/file/d/.../view atau pautan terus fail"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-800">
+                Sumber Fail ({MaterialTypeLabel(materialType)})
+              </span>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('upload')}
+                  className={`rounded-md px-2.5 py-1 font-medium ${
+                    uploadMode === 'upload'
+                      ? 'bg-emerald-700 text-white'
+                      : 'text-slate-600'
+                  }`}
+                >
+                  Muat Naik Terus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('url')}
+                  className={`rounded-md px-2.5 py-1 font-medium ${
+                    uploadMode === 'url' ? 'bg-emerald-700 text-white' : 'text-slate-600'
+                  }`}
+                >
+                  Pautan URL
+                </button>
+              </div>
+            </div>
+
+            {uploadMode === 'upload' ? (
+              <div className="space-y-2.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={
+                    materialType === 'image'
+                      ? 'image/*'
+                      : materialType === 'video'
+                        ? '.mp4,.webm,video/mp4,video/webm'
+                        : materialType === 'pdf'
+                          ? 'application/pdf,.pdf'
+                          : 'audio/*'
+                  }
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-white p-3">
+                  <div className="text-xs text-slate-600">
+                    {fileUrl ? (
+                      <p className="font-semibold text-emerald-800">
+                        Fail sedia disimpan{' '}
+                        {fileSizeBytes ? `(${formatBytes(fileSizeBytes)})` : ''}
+                      </p>
+                    ) : (
+                      <p>
+                        Pilih fail {MaterialTypeLabel(materialType)} daripada komputer atau telefon untuk dimuat naik ke Firebase Storage.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    {uploading
+                      ? 'Memuat Naik...'
+                      : fileUrl
+                        ? 'Gantikan Fail'
+                        : 'Pilih & Muat Naik Fail'}
+                  </button>
+                </div>
+
+                {uploading && uploadProgress && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-emerald-900">
+                      <span>
+                        {uploadProgress.percent}% ({formatBytes(uploadProgress.bytesTransferred)} /{' '}
+                        {formatBytes(uploadProgress.totalBytes)})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => uploadTaskRef.current?.cancel()}
+                        className="text-red-700 font-semibold hover:underline"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-200">
+                      <div
+                        className="h-full bg-emerald-700 transition-all"
+                        style={{width: `${uploadProgress.percent}%`}}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-slate-700">
+                  Pautan URL Bahan ({MaterialTypeLabel(materialType)})
+                </label>
+                <input
+                  type="url"
+                  required
+                  maxLength={1000}
+                  value={fileUrl}
+                  onChange={(e) => {
+                    setFileUrl(e.target.value);
+                    setStoragePath(null);
+                  }}
+                  placeholder="https://..."
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -521,7 +688,7 @@ export function AdminMaterialsManager() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(mat)}
+                          onClick={() => setConfirmDeleteMat(mat)}
                           title="Padam"
                           className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-red-700"
                         >
@@ -554,6 +721,34 @@ export function AdminMaterialsManager() {
               </button>
             </div>
             <InlineMaterialViewer material={previewMaterial} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pengesahan Padam Bahan */}
+      {confirmDeleteMat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Sahkan Pemadaman Bahan</h3>
+            <p className="text-sm text-slate-600">
+              Padam bahan <strong className="text-slate-900">"{confirmDeleteMat.title}"</strong>?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteMat(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(confirmDeleteMat)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
+              >
+                Ya, Padam
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,14 +1,25 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   Database,
   Edit3,
+  Eye,
+  FileEdit,
   Loader2,
   Plus,
   Trash2,
 } from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
+import {
+  CONTENT_BODY_MAX_LENGTH,
+  getTemplateById,
+  hasBase64Media,
+  NOTE_TEMPLATES,
+  parseNoteContent,
+  serializeNoteContent,
+  type NoteTemplateId,
+} from '../../lib/noteTemplates';
 import {
   deleteContentBlock,
   deleteModule,
@@ -33,9 +44,12 @@ import type {
   Subtopic,
   Topic,
 } from '../../types/database';
+import {NotePreviewModal} from './NotePreviewModal';
+import {RichNoteEditor} from './RichNoteEditor';
 
 export function AdminCurriculumManager() {
-  const {user} = useAuth();
+  const {user, profile, isAdminUser} = useAuth();
+  const canEditContent = isAdminUser || profile?.role === 'ADMIN';
   const [modules, setModules] = useState<LearningModule[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
@@ -73,16 +87,23 @@ export function AdminCurriculumManager() {
   const [subSummary, setSubSummary] = useState('');
   const [editingSubId, setEditingSubId] = useState<string | undefined>(undefined);
 
-  // Borang Blok Kandungan
+  // Borang Blok Kandungan / Editor Nota
   const [blockType, setBlockType] = useState<ContentBlockType>('note');
   const [blockTitle, setBlockTitle] = useState('');
-  const [blockBody, setBlockBody] = useState('');
+  const [blockTemplateId, setBlockTemplateId] = useState<NoteTemplateId>('standard');
+  const [blockBodyHtml, setBlockBodyHtml] = useState<string>(NOTE_TEMPLATES[0].starterHtml);
   const [blockArabic, setBlockArabic] = useState('');
   const [blockTranslit, setBlockTranslit] = useState('');
   const [blockTranslation, setBlockTranslation] = useState('');
   const [blockSubtopicId, setBlockSubtopicId] = useState<string>('');
-  const [blockStatus, setBlockStatus] = useState<PublishStatus>('Published');
+  const [blockStatus, setBlockStatus] = useState<PublishStatus>('Draft');
+  const [blockSortOrder, setBlockSortOrder] = useState<number>(1);
   const [editingBlockId, setEditingBlockId] = useState<string | undefined>(undefined);
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSavedBlock, setPreviewSavedBlock] = useState<ContentBlock | null>(null);
+  const [confirmDeleteBlock, setConfirmDeleteBlock] = useState<ContentBlock | null>(null);
+  const [deletingBlock, setDeletingBlock] = useState(false);
 
   const loadCurriculum = async () => {
     setLoading(true);
@@ -114,6 +135,15 @@ export function AdminCurriculumManager() {
   }, []);
 
   useEffect(() => {
+    setEditingBlockId(undefined);
+    setBlockTitle('');
+    setBlockTemplateId('standard');
+    setBlockBodyHtml(NOTE_TEMPLATES[0].starterHtml);
+    setBlockArabic('');
+    setBlockTranslit('');
+    setBlockTranslation('');
+    setBlockSubtopicId('');
+    setBlockStatus('Draft');
     if (!selectedTopicId) {
       setSubtopics([]);
       setBlocks([]);
@@ -296,44 +326,165 @@ export function AdminCurriculumManager() {
     setSubtopics((prev) => prev.filter((s) => s.id !== id));
   };
 
-  const handleSaveBlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTopicId || !blockTitle.trim()) return;
+  const resetBlockEditor = () => {
+    setEditingBlockId(undefined);
+    setBlockType('note');
+    setBlockTitle('');
+    setBlockTemplateId('standard');
+    setBlockBodyHtml(NOTE_TEMPLATES[0].starterHtml);
+    setBlockArabic('');
+    setBlockTranslit('');
+    setBlockTranslation('');
+    setBlockSubtopicId('');
+    setBlockStatus('Draft');
+    setBlockSortOrder(blocks.length + 1);
+  };
+
+  const serializedBlockBody = useMemo(
+    () => serializeNoteContent(blockBodyHtml, blockTemplateId),
+    [blockBodyHtml, blockTemplateId]
+  );
+
+  const persistContentBlock = async (targetStatus: PublishStatus) => {
+    if (!canEditContent) {
+      setNotice({
+        type: 'error',
+        text: 'Hanya pentadbir yang dibenarkan boleh mengedit dan menerbitkan nota.',
+      });
+      return;
+    }
+    if (!selectedTopicId) {
+      setNotice({type: 'error', text: 'Sila pilih topik dahulu sebelum menyimpan nota.'});
+      return;
+    }
+    if (!blockTitle.trim()) {
+      setNotice({type: 'error', text: 'Sila masukkan tajuk nota terlebih dahulu.'});
+      return;
+    }
+    if (hasBase64Media(blockBodyHtml)) {
+      setNotice({
+        type: 'error',
+        text: 'Fail gambar atau video Base64 tidak dibenarkan dalam Firestore. Sila muat naik media melalui butang INSERT IMAGE atau INSERT VIDEO.',
+      });
+      return;
+    }
+    if (serializedBlockBody.length > CONTENT_BODY_MAX_LENGTH) {
+      setNotice({
+        type: 'error',
+        text: `Kandungan nota (${serializedBlockBody.length.toLocaleString()} aksara) melebihi had maksimum ${CONTENT_BODY_MAX_LENGTH.toLocaleString()} aksara Firestore. Sila ringkaskan teks atau pecahkan kepada nota baharu.`,
+      });
+      return;
+    }
+
+    setSavingBlock(true);
+    setNotice(null);
     try {
+      const existingBlock = editingBlockId
+        ? blocks.find((b) => b.id === editingBlockId)
+        : undefined;
+      const resolvedSortOrder = existingBlock
+        ? existingBlock.sort_order
+        : Math.max(1, blockSortOrder || blocks.length + 1);
+
       await saveContentBlock({
         ...(editingBlockId ? {id: editingBlockId} : {}),
         topic_id: selectedTopicId,
         subtopic_id: blockSubtopicId || null,
         block_type: blockType,
         title: blockTitle.trim(),
-        body: blockBody.trim(),
+        body: serializedBlockBody,
         arabic_text: blockArabic.trim() || null,
         transliteration: blockTranslit.trim() || null,
         translation: blockTranslation.trim() || null,
-        sort_order: blocks.length + 1,
-        status: blockStatus,
+        sort_order: resolvedSortOrder,
+        status: targetStatus,
       });
-      setEditingBlockId(undefined);
-      setBlockTitle('');
-      setBlockBody('');
-      setBlockArabic('');
-      setBlockTranslit('');
-      setBlockTranslation('');
-      setBlockSubtopicId('');
+
+      const wasPublished = editingBlockId && existingBlock?.status === 'Published';
+      resetBlockEditor();
+      setPreviewOpen(false);
       const updated = await fetchContentBlocks(selectedTopicId, true);
       setBlocks(updated);
-      setNotice({type: 'success', text: 'Nota / blok kandungan berjaya disimpan.'});
+      setNotice({
+        type: 'success',
+        text:
+          targetStatus === 'Draft'
+            ? 'Nota berjaya disimpan sebagai draf.'
+            : wasPublished
+              ? 'Nota yang diterbitkan berjaya dikemas kini.'
+              : 'Nota berjaya diterbitkan kepada pelajar.',
+      });
     } catch (err) {
       setNotice({
         type: 'error',
         text: err instanceof Error ? err.message : 'Gagal menyimpan blok kandungan.',
       });
+    } finally {
+      setSavingBlock(false);
     }
   };
 
-  const handleDeleteBlock = async (id: string) => {
-    await deleteContentBlock(id);
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  const handleSaveBlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await persistContentBlock(blockStatus);
+  };
+
+  const handleToggleBlockPublish = async (blk: ContentBlock) => {
+    if (!canEditContent) return;
+    const nextStatus: PublishStatus = blk.status === 'Published' ? 'Draft' : 'Published';
+    try {
+      await saveContentBlock({
+        id: blk.id,
+        topic_id: blk.topic_id,
+        subtopic_id: blk.subtopic_id,
+        block_type: blk.block_type,
+        title: blk.title,
+        body: blk.body,
+        arabic_text: blk.arabic_text,
+        transliteration: blk.transliteration,
+        translation: blk.translation,
+        sort_order: blk.sort_order,
+        status: nextStatus,
+      });
+      const updated = await fetchContentBlocks(selectedTopicId, true);
+      setBlocks(updated);
+      setNotice({
+        type: 'success',
+        text:
+          nextStatus === 'Published'
+            ? `Nota "${blk.title}" berjaya diterbitkan.`
+            : `Nota "${blk.title}" ditukar kepada Draf.`,
+      });
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Gagal menukar status nota.',
+      });
+    }
+  };
+
+  const handleConfirmDeleteBlock = async () => {
+    if (!confirmDeleteBlock || !canEditContent) return;
+    setDeletingBlock(true);
+    try {
+      await deleteContentBlock(confirmDeleteBlock.id);
+      if (editingBlockId === confirmDeleteBlock.id) {
+        resetBlockEditor();
+      }
+      setBlocks((prev) => prev.filter((b) => b.id !== confirmDeleteBlock.id));
+      setNotice({
+        type: 'success',
+        text: `Nota "${confirmDeleteBlock.title}" berjaya dipadam.`,
+      });
+      setConfirmDeleteBlock(null);
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Gagal memadam nota.',
+      });
+    } finally {
+      setDeletingBlock(false);
+    }
   };
 
   if (loading) {
@@ -766,174 +917,384 @@ export function AdminCurriculumManager() {
                   </ul>
                 </div>
 
-                {/* Pengurusan Nota, Bacaan & Aktiviti */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-                  <h3 className="text-base font-bold text-slate-900">
-                    Nota, Lafaz Arab &amp; Aktiviti ({blocks.length})
-                  </h3>
+                {/* Pengurusan Nota, Editor Kandungan, Lafaz & Aktiviti */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Editor Kandungan, Nota &amp; Aktiviti ({blocks.length})
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {editingBlockId
+                          ? 'Sedang menyunting nota sedia ada. Media dan susun atur sedia ada akan dikekalkan.'
+                          : 'Pilih template susun atur, tulis nota, masukkan gambar atau video terus dari peranti, pratonton dan terbitkan.'}
+                      </p>
+                    </div>
+                    {editingBlockId && (
+                      <button
+                        type="button"
+                        onClick={resetBlockEditor}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        + Cipta Nota Baharu
+                      </button>
+                    )}
+                  </div>
 
                   <form
                     onSubmit={handleSaveBlock}
-                    className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3"
+                    className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-4"
                   >
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <select
-                        value={blockType}
-                        onChange={(e) => setBlockType(e.target.value as ContentBlockType)}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium"
-                      >
-                        <option value="note">Nota Pembelajaran</option>
-                        <option value="prayer_recitation">Bacaan dalam Solat</option>
-                        <option value="quran_tajwid">Contoh Ayat &amp; Tajwid</option>
-                        <option value="activity">Aktiviti Pembelajaran</option>
-                      </select>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                          Jenis Kandungan
+                        </label>
+                        <select
+                          value={blockType}
+                          onChange={(e) => setBlockType(e.target.value as ContentBlockType)}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium"
+                        >
+                          <option value="note">Nota Pembelajaran</option>
+                          <option value="prayer_recitation">Bacaan dalam Solat</option>
+                          <option value="quran_tajwid">Contoh Ayat &amp; Tajwid</option>
+                          <option value="activity">Aktiviti Pembelajaran</option>
+                          <option value="objective">Objektif Khusus</option>
+                        </select>
+                      </div>
 
-                      <select
-                        value={blockSubtopicId}
-                        onChange={(e) => setBlockSubtopicId(e.target.value)}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                      >
-                        <option value="">Pautan: Umum Topik</option>
-                        {subtopics.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            Subtopik: {s.title}
-                          </option>
-                        ))}
-                      </select>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                          Pautan Subtopik
+                        </label>
+                        <select
+                          value={blockSubtopicId}
+                          onChange={(e) => setBlockSubtopicId(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        >
+                          <option value="">Pautan: Umum Topik</option>
+                          {subtopics.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              Subtopik: {s.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                      <select
-                        value={blockStatus}
-                        onChange={(e) => setBlockStatus(e.target.value as PublishStatus)}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                      >
-                        <option value="Published">Published</option>
-                        <option value="Draft">Draft</option>
-                      </select>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                          Status Semasa
+                        </label>
+                        <select
+                          value={blockStatus}
+                          onChange={(e) => setBlockStatus(e.target.value as PublishStatus)}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium"
+                        >
+                          <option value="Draft">Draft (Draf)</option>
+                          <option value="Published">Published (Diterbitkan)</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <input
-                      type="text"
-                      required
-                      value={blockTitle}
-                      onChange={(e) => setBlockTitle(e.target.value)}
-                      placeholder="Tajuk nota / bacaan / aktiviti"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                    />
-
-                    <textarea
-                      rows={3}
-                      value={blockBody}
-                      onChange={(e) => setBlockBody(e.target.value)}
-                      placeholder="Huraian isi kandungan atau arahan aktiviti"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                    />
-
-                    <input
-                      type="text"
-                      value={blockArabic}
-                      onChange={(e) => setBlockArabic(e.target.value)}
-                      placeholder="Teks Arab (pilihan, cth: سُبْحَانَ رَبِّيَ الْعَظِيمِ)"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-right font-arabic"
-                    />
-
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                        Tajuk Nota / Kandungan
+                      </label>
                       <input
                         type="text"
-                        value={blockTranslit}
-                        onChange={(e) => setBlockTranslit(e.target.value)}
-                        placeholder="Transliterasi Rumi (pilihan)"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                      />
-                      <input
-                        type="text"
-                        value={blockTranslation}
-                        onChange={(e) => setBlockTranslation(e.target.value)}
-                        placeholder="Terjemahan Bahasa Melayu (pilihan)"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        required
+                        maxLength={200}
+                        value={blockTitle}
+                        onChange={(e) => setBlockTitle(e.target.value)}
+                        placeholder="Masukkan tajuk nota, bacaan atau aktiviti"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium"
                       />
                     </div>
 
-                    <div className="flex justify-end gap-2">
-                      {editingBlockId && (
+                    {/* Editor Kandungan Kaya dengan Template, Toolbar, Gambar & Video */}
+                    <RichNoteEditor
+                      topicId={selectedTopicId}
+                      valueHtml={blockBodyHtml}
+                      templateId={blockTemplateId}
+                      showTemplatePickerInitially={!editingBlockId}
+                      onChange={(nextHtml, nextTemplate) => {
+                        setBlockBodyHtml(nextHtml);
+                        setBlockTemplateId(nextTemplate);
+                      }}
+                    />
+
+                    {/* Medan Tambahan Lafaz Arab & Terjemahan (Pilihan untuk Solat/Tajwid) */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5">
+                      <p className="text-[11px] font-semibold text-slate-600">
+                        Medan Tambahan Lafaz Arab / Dalil (Pilihan)
+                      </p>
+                      <input
+                        type="text"
+                        value={blockArabic}
+                        onChange={(e) => setBlockArabic(e.target.value)}
+                        placeholder="Teks Arab (pilihan, cth: سُبْحَانَ رَبِّيَ الْعَظِيمِ)"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-right font-arabic"
+                      />
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <input
+                          type="text"
+                          value={blockTranslit}
+                          onChange={(e) => setBlockTranslit(e.target.value)}
+                          placeholder="Transliterasi Rumi (pilihan)"
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        />
+                        <input
+                          type="text"
+                          value={blockTranslation}
+                          onChange={(e) => setBlockTranslation(e.target.value)}
+                          placeholder="Terjemahan Bahasa Melayu (pilihan)"
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Butang Pratonton, Simpan Draf & Terbitkan */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-2">
+                        {editingBlockId && (
+                          <button
+                            type="button"
+                            onClick={resetBlockEditor}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Batal Edit
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingBlockId(undefined);
-                            setBlockTitle('');
-                            setBlockBody('');
-                            setBlockArabic('');
-                            setBlockTranslit('');
-                            setBlockTranslation('');
-                          }}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs"
+                          onClick={() => setPreviewOpen(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100"
                         >
-                          Batal Edit
+                          <Eye className="h-3.5 w-3.5 text-emerald-700" />
+                          Pratonton (Desktop / Telefon)
                         </button>
-                      )}
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800"
-                      >
-                        {editingBlockId ? 'Simpan Perubahan' : 'Tambah Blok Kandungan'}
-                      </button>
+
+                        <button
+                          type="button"
+                          disabled={savingBlock}
+                          onClick={() => persistContentBlock('Draft')}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                        >
+                          <FileEdit className="h-3.5 w-3.5" />
+                          Simpan sebagai Draf
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={savingBlock}
+                          onClick={() => persistContentBlock('Published')}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {savingBlock
+                            ? 'Menyimpan...'
+                            : editingBlockId && blockStatus === 'Published'
+                              ? 'Kemas Kini Diterbitkan'
+                              : 'Terbitkan Nota'}
+                        </button>
+                      </div>
                     </div>
                   </form>
 
+                  {/* Senarai Nota & Blok Tersimpan */}
                   <div className="space-y-2.5">
-                    {blocks.map((blk) => (
-                      <div
-                        key={blk.id}
-                        className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 p-3.5"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-amber-700">
-                            {blk.block_type} · {blk.status}
-                          </p>
-                          <p className="text-sm font-semibold text-slate-900">
-                            {blk.title}
-                          </p>
-                          {blk.arabic_text && (
-                            <p className="mt-1 text-lg font-arabic text-slate-800">
-                              {blk.arabic_text}
-                            </p>
-                          )}
-                          <p className="mt-1 line-clamp-2 text-xs text-slate-600">
-                            {blk.body}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingBlockId(blk.id);
-                              setBlockType(blk.block_type);
-                              setBlockTitle(blk.title);
-                              setBlockBody(blk.body);
-                              setBlockArabic(blk.arabic_text || '');
-                              setBlockTranslit(blk.transliteration || '');
-                              setBlockTranslation(blk.translation || '');
-                              setBlockSubtopicId(blk.subtopic_id || '');
-                              setBlockStatus(blk.status);
-                            }}
-                            className="rounded p-1.5 text-slate-500 hover:text-emerald-800"
+                    {blocks.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">
+                        Belum ada nota disimpan untuk topik ini. Gunakan editor di atas untuk mencipta nota baharu.
+                      </p>
+                    ) : (
+                      blocks.map((blk) => {
+                        const parsed = parseNoteContent(blk.body);
+                        const tplInfo = getTemplateById(parsed.templateId);
+                        const hasImage = /<img\b/i.test(blk.body);
+                        const hasVideo = /<video\b/i.test(blk.body);
+                        return (
+                          <div
+                            key={blk.id}
+                            className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border p-3.5 ${
+                              editingBlockId === blk.id
+                                ? 'border-emerald-600 bg-emerald-50/30'
+                                : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <Edit3 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBlock(blk.id)}
-                            className="rounded p-1.5 text-slate-500 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span
+                                  className={`rounded px-2 py-0.5 font-semibold border ${
+                                    blk.status === 'Published'
+                                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                                  }`}
+                                >
+                                  {blk.status === 'Published' ? 'Diterbitkan' : 'Draf'}
+                                </span>
+                                <span className="font-medium text-amber-700">
+                                  {blk.block_type}
+                                </span>
+                                {parsed.isRichHtml && (
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                                    {tplInfo.name}
+                                  </span>
+                                )}
+                                {hasImage && (
+                                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+                                    Bergambar
+                                  </span>
+                                )}
+                                {hasVideo && (
+                                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                                    Video
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">
+                                {blk.title}
+                              </p>
+                              {blk.arabic_text && (
+                                <p className="mt-1 text-lg font-arabic text-slate-800">
+                                  {blk.arabic_text}
+                                </p>
+                              )}
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                                {parsed.plainText || 'Tiada ringkasan teks.'}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewSavedBlock(blk)}
+                                title="Pratonton Nota"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-emerald-800 hover:bg-slate-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBlockPublish(blk)}
+                                title={
+                                  blk.status === 'Published'
+                                    ? 'Tukar kepada Draf'
+                                    : 'Terbitkan Nota'
+                                }
+                                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                              >
+                                {blk.status === 'Published' ? 'Jadikan Draf' : 'Terbitkan'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const p = parseNoteContent(blk.body);
+                                  setEditingBlockId(blk.id);
+                                  setBlockType(blk.block_type);
+                                  setBlockTitle(blk.title);
+                                  setBlockTemplateId(p.templateId);
+                                  setBlockBodyHtml(p.html || '<p><br></p>');
+                                  setBlockArabic(blk.arabic_text || '');
+                                  setBlockTranslit(blk.transliteration || '');
+                                  setBlockTranslation(blk.translation || '');
+                                  setBlockSubtopicId(blk.subtopic_id || '');
+                                  setBlockStatus(blk.status);
+                                  setBlockSortOrder(blk.sort_order);
+                                }}
+                                title="Edit Nota"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-emerald-800 hover:bg-slate-50"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBlock(blk)}
+                                title="Padam Nota"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </>
             )}
           </section>
+        </div>
+      )}
+
+      {/* Modal Pratonton Nota (Paparan Desktop & Telefon) */}
+      <NotePreviewModal
+        open={previewOpen || Boolean(previewSavedBlock)}
+        onClose={() => {
+          setPreviewOpen(false);
+          setPreviewSavedBlock(null);
+        }}
+        title={previewSavedBlock ? previewSavedBlock.title : blockTitle}
+        blockType={previewSavedBlock ? previewSavedBlock.block_type : blockType}
+        status={previewSavedBlock ? previewSavedBlock.status : blockStatus}
+        serializedBody={previewSavedBlock ? previewSavedBlock.body : serializedBlockBody}
+        arabicText={
+          previewSavedBlock ? previewSavedBlock.arabic_text : blockArabic.trim() || null
+        }
+        transliteration={
+          previewSavedBlock
+            ? previewSavedBlock.transliteration
+            : blockTranslit.trim() || null
+        }
+        translation={
+          previewSavedBlock ? previewSavedBlock.translation : blockTranslation.trim() || null
+        }
+        isEditing={previewSavedBlock ? true : Boolean(editingBlockId)}
+        saving={savingBlock}
+        onSaveDraft={
+          previewSavedBlock ? undefined : () => persistContentBlock('Draft')
+        }
+        onPublish={
+          previewSavedBlock
+            ? undefined
+            : () => persistContentBlock('Published')
+        }
+      />
+
+      {/* Modal Pengesahan Padam Nota */}
+      {confirmDeleteBlock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Sahkan Pemadaman Nota</h3>
+            <p className="text-sm text-slate-600">
+              Adakah anda pasti mahu memadam nota{' '}
+              <strong className="text-slate-900">"{confirmDeleteBlock.title}"</strong>?
+              Tindakan ini tidak boleh dibatalkan.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingBlock}
+                onClick={() => setConfirmDeleteBlock(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={deletingBlock}
+                onClick={handleConfirmDeleteBlock}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingBlock ? 'Memadam...' : 'Ya, Padam Nota'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

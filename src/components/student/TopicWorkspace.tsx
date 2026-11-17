@@ -25,6 +25,7 @@ import type {
   Subtopic,
   Topic,
 } from '../../types/database';
+import {NoteContentRenderer} from '../common/NoteContentRenderer';
 import {InlineMaterialViewer} from './InlineMaterialViewer';
 
 interface TopicWorkspaceProps {
@@ -273,7 +274,9 @@ export function TopicWorkspace({
                             ? 'Contoh Ayat & Hukum Tajwid'
                             : block.block_type === 'activity'
                               ? 'Aktiviti Pembelajaran'
-                              : 'Nota Pembelajaran'}
+                              : block.block_type === 'objective'
+                                ? 'Objektif Khusus'
+                                : 'Nota Pembelajaran'}
                       </p>
                       <h3 className="mt-1 text-lg font-semibold text-slate-900">
                         {block.title}
@@ -297,11 +300,7 @@ export function TopicWorkspace({
                         </div>
                       )}
 
-                      {block.body && (
-                        <div className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-                          {block.body}
-                        </div>
-                      )}
+                      {block.body && <NoteContentRenderer body={block.body} className="mt-3" />}
                     </article>
                   ))}
                 </section>
